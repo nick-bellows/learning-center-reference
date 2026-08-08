@@ -30,5 +30,18 @@
 - **Table-driven test** — list test cases in a slice, loop over them, run each with `t.Run(name, ...)` as a named subtest. The idiomatic Go testing style; adding a case is one line.
 - **`go test ./...`** — compiles and runs every test in the module. Green = all pass.
 
+### Go — web & database (Parts A & B)
+- **Router / handler** — the router maps a URL+method to a *handler* function. Every handler has the signature `(w http.ResponseWriter, r *http.Request)`: `w` is where you write the reply, `r` is the incoming request. We use `chi` as the router.
+- **Middleware** — code that wraps every request (request-id, logging, panic recovery). Runs in the order added, before the handler.
+- **`httptest`** — standard-library helper to call the router in a test without opening a real port. How the `/health` test works.
+- **Interface** — a set of method signatures (e.g. `EligibilityLoader`). Any type with those methods satisfies it — no explicit "implements". Like a C# interface but implicit.
+- **Dependency injection (DI)** — passing a thing's collaborators in from outside (the store handed to the router via `Deps`) instead of creating them inside. Makes handlers testable with a fake and swappable.
+- **`context.Context`** — carries cancellation/deadline through a call chain; the conventional first argument of any function that does I/O.
+- **Connection pool** (`pgxpool`) — a set of reusable DB connections managed for you, so you don't open/close one per request.
+- **`Scan`** — copies a query's result columns into Go variables. `QueryRow(...).Scan(&x)`.
+- **`sql.NullTime`** — models "a timestamp, or NULL." `.Valid` is false when the DB value was NULL — how we turn a missing row into a nil `*time.Time`.
+- **Error wrapping** (`fmt.Errorf("...: %w", err)`) — attaches context to an error while keeping the original inspectable with `errors.Is` (e.g. detecting `store.ErrNotFound` to return 404).
+- **Integration test** — a test that talks to a real dependency (Postgres here). Ours skips itself unless `DATABASE_URL` is set, so plain `go test ./...` and CI stay fast and DB-free.
+
 ### Coming later
 - **Event log / projection** — (M2) instead of storing "current progress," we store an append-only list of things that happened, then *project* the current state from them.

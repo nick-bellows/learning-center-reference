@@ -33,9 +33,14 @@ type Inputs struct {
 	Now                    time.Time
 	SafeSportExpires       *time.Time // nil = no SafeSport on file
 	BackgroundCheckExpires *time.Time // nil = no background check on file
-	RoleCredentialExpires  *time.Time // coaching license or referee recert; nil = none
 	ActiveHoldSources      []string   // e.g. ["safesport"]; empty = no active holds
 	GraceDays              int        // days after expiry still allowed (0 = flip exactly on expiry)
+
+	// Role credential = a coaching license or referee recertification. It only applies to
+	// roles that require one, and it isn't modeled until M3 — so it's evaluated only when
+	// RoleCredentialRequired is true.
+	RoleCredentialRequired bool
+	RoleCredentialExpires  *time.Time // nil = none on file
 }
 
 // Decision is the result: the status plus a human-readable reason for the UI and audit trail.
@@ -55,15 +60,20 @@ func Evaluate(in Inputs) Decision {
 	}
 
 	// 2. Every required credential must be present and still current (within any grace window).
-	grace := time.Duration(in.GraceDays) * 24 * time.Hour
-	required := []struct {
+	//    SafeSport and the background check always apply; the role credential only when required.
+	type cred struct {
 		name    string
 		expires *time.Time
-	}{
+	}
+	required := []cred{
 		{"SafeSport certification", in.SafeSportExpires},
 		{"background check", in.BackgroundCheckExpires},
-		{"role credential", in.RoleCredentialExpires},
 	}
+	if in.RoleCredentialRequired {
+		required = append(required, cred{"role credential", in.RoleCredentialExpires})
+	}
+
+	grace := time.Duration(in.GraceDays) * 24 * time.Hour
 	for _, c := range required {
 		if c.expires == nil {
 			return Decision{StatusIneligible, "missing " + c.name}
@@ -73,6 +83,6 @@ func Evaluate(in Inputs) Decision {
 		}
 	}
 
-	// 3. No hold, and every credential current -> eligible.
+	// 3. No hold, and every required credential current -> eligible.
 	return Decision{StatusEligible, "all safeguarding requirements current"}
 }

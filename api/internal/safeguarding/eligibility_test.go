@@ -23,33 +23,43 @@ func TestEvaluate(t *testing.T) {
 	}{
 		{
 			name: "all current -> eligible",
-			in:   Inputs{Now: now, SafeSportExpires: ptr(future), BackgroundCheckExpires: ptr(future), RoleCredentialExpires: ptr(future)},
+			in:   Inputs{Now: now, SafeSportExpires: ptr(future), BackgroundCheckExpires: ptr(future)},
 			want: StatusEligible,
 		},
 		{
 			name: "active hold overrides everything -> suspended",
-			in:   Inputs{Now: now, SafeSportExpires: ptr(future), BackgroundCheckExpires: ptr(future), RoleCredentialExpires: ptr(future), ActiveHoldSources: []string{"safesport"}},
+			in:   Inputs{Now: now, SafeSportExpires: ptr(future), BackgroundCheckExpires: ptr(future), ActiveHoldSources: []string{"safesport"}},
 			want: StatusSuspended,
 		},
 		{
 			name: "hold beats expired credentials -> suspended",
-			in:   Inputs{Now: now, SafeSportExpires: ptr(past), BackgroundCheckExpires: ptr(past), RoleCredentialExpires: ptr(past), ActiveHoldSources: []string{"us_soccer"}},
+			in:   Inputs{Now: now, SafeSportExpires: ptr(past), BackgroundCheckExpires: ptr(past), ActiveHoldSources: []string{"us_soccer"}},
 			want: StatusSuspended,
 		},
 		{
 			name: "expired background check -> ineligible",
-			in:   Inputs{Now: now, SafeSportExpires: ptr(future), BackgroundCheckExpires: ptr(past), RoleCredentialExpires: ptr(future)},
+			in:   Inputs{Now: now, SafeSportExpires: ptr(future), BackgroundCheckExpires: ptr(past)},
 			want: StatusIneligible,
 		},
 		{
 			name: "missing safesport -> ineligible",
-			in:   Inputs{Now: now, SafeSportExpires: nil, BackgroundCheckExpires: ptr(future), RoleCredentialExpires: ptr(future)},
+			in:   Inputs{Now: now, SafeSportExpires: nil, BackgroundCheckExpires: ptr(future)},
 			want: StatusIneligible,
 		},
 		{
 			name: "within grace window -> eligible",
-			in:   Inputs{Now: now, SafeSportExpires: ptr(now.AddDate(0, 0, -5)), BackgroundCheckExpires: ptr(future), RoleCredentialExpires: ptr(future), GraceDays: 10},
+			in:   Inputs{Now: now, SafeSportExpires: ptr(now.AddDate(0, 0, -5)), BackgroundCheckExpires: ptr(future), GraceDays: 10},
 			want: StatusEligible,
+		},
+		{
+			name: "role credential required + current -> eligible",
+			in:   Inputs{Now: now, SafeSportExpires: ptr(future), BackgroundCheckExpires: ptr(future), RoleCredentialRequired: true, RoleCredentialExpires: ptr(future)},
+			want: StatusEligible,
+		},
+		{
+			name: "role credential required + expired -> ineligible",
+			in:   Inputs{Now: now, SafeSportExpires: ptr(future), BackgroundCheckExpires: ptr(future), RoleCredentialRequired: true, RoleCredentialExpires: ptr(past)},
+			want: StatusIneligible,
 		},
 	}
 
