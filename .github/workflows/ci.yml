@@ -1,0 +1,25 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+# The pipeline is green from the first commit and tightens as each part lands.
+# The rule: never let the baseline go red. Add a job only when it can pass.
+
+jobs:
+  scaffold:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate compose file
+        run: docker compose config -q
+
+  # Added in Step 2 (once api/ and web/ have code):
+  #   api:     go vet ./... ; golangci-lint run ; go test ./...
+  #   web:     pnpm lint ; pnpm exec tsc --noEmit ; pnpm test
+  #   openapi: redocly lint api/api/openapi.yaml
+  #
+  # Added in Week 2 (once there are pages to test and images to build):
+  #   a11y:    playwright + @axe-core/playwright against the dev server
+  #   build:   docker build ./api and ./web

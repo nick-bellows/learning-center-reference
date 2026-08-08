@@ -1,0 +1,33 @@
+# --- Secrets / local config ---
+.env
+.env.local
+*.local
+
+# --- Go ---
+/api/bin/
+/api/tmp/
+*.test
+*.out
+
+# --- Node / Next.js ---
+node_modules/
+.next/
+out/
+dist/
+build/
+coverage/
+*.tsbuildinfo
+.pnpm-store/
+
+# --- Sanity ---
+/studio/dist/
+
+# --- Editors / OS ---
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# --- Data: never commit real or generated member data ---
+/db/local/
+*.dump
