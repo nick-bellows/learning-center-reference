@@ -43,5 +43,18 @@
 - **Error wrapping** (`fmt.Errorf("...: %w", err)`) — attaches context to an error while keeping the original inspectable with `errors.Is` (e.g. detecting `store.ErrNotFound` to return 404).
 - **Integration test** — a test that talks to a real dependency (Postgres here). Ours skips itself unless `DATABASE_URL` is set, so plain `go test ./...` and CI stay fast and DB-free.
 
+### TypeScript & React (front end)
+- **TSX / JSX** — HTML-like syntax inside TypeScript. `<span className={...}>` is a component's markup. `className` (not `class`) because `class` is a reserved word.
+- **Component** — a function that returns UI. `MembersPage()` and `StatusBadge()` are components. Props are its typed inputs (like method parameters).
+- **Server Component** — the default in Next's App Router: runs on the server, can `await` data directly, ships no JS for itself to the browser. `MembersPage` is one. Add `"use client"` only when you need interactivity (state, clicks).
+- **Union type** (`"eligible" | "suspended" | ...`) — a value restricted to an exact set of strings, checked at compile time. Like a C# enum, but structural.
+- **Optional chaining** (`r.elig?.status`) — safely reads a field that might be missing/undefined instead of throwing. Like C#'s `?.`.
+- **Tailwind** — utility CSS classes (`px-2`, `text-green-800`) applied directly in markup; the design comes from composing them.
+
+### Containers & deploy (Part B)
+- **Dockerfile** — a recipe to build an image. Ours is **multi-stage**: a big Go image compiles the binary, then only the binary is copied into a tiny base.
+- **Distroless image** — a minimal base with no shell/OS tools, just enough to run the binary. Smaller and a smaller attack surface (~21 MB here).
+- **Fly.io / Vercel** — where the API and web run in production. `fly.toml` configures the API app; Vercel hosts the Next.js app.
+
 ### Coming later
-- **Event log / projection** — (M2) instead of storing "current progress," we store an append-only list of things that happened, then *project* the current state from them.
+- **Event log / projection** — (Part C) instead of storing "current progress," we store an append-only list of things that happened, then *project* the current state from them.

@@ -1,0 +1,25 @@
+# Fly.io config for the Go API. `fly launch` may rewrite `app` and `primary_region` to
+# your chosen values — that's expected. DATABASE_URL is NOT here; it's set as a Fly secret
+# when you attach Fly Postgres (see docs/deploy.md).
+
+app = "learning-center-api"
+primary_region = "iad"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  PORT = "8080"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+
+[[http_service.checks]]
+  method = "GET"
+  path = "/health"
+  interval = "15s"
+  timeout = "2s"
