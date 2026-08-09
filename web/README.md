@@ -1,18 +1,21 @@
 # web
 
-> Status: **planned.** Next.js (App Router) + TypeScript + Tailwind, `en` + `es`.
+The Learning Center front end — Next.js (App Router) + TypeScript + Tailwind.
 
-Structure lands in Step 2:
+- `app/page.tsx` — landing page
+- `app/members/page.tsx` — member participation status; a Server Component that fetches the
+  Go API's eligibility endpoint and renders status badges
 
-```text
-app/[locale]/(learner)/   dashboard, course player, certificates
-app/[locale]/(admin)/     roster, compliance dashboard
-app/verify/[certId]/      public certificate verification
-components/ui/            design-system primitives (from tokens)
-lib/                      typed API client, auth, i18n
-messages/                 en.json, es.json
-styles/tokens.css        color / type scale / spacing tokens
-tests/                    vitest unit + playwright a11y
+## Run locally
+
+Requires the API + database running (see the repo root). Then:
+
+```bash
+npm install
+npm run dev
 ```
 
-Every screen ships keyboard-navigable with visible focus. Accessibility is tested in CI, not asserted.
+Open http://localhost:3000. Set `API_BASE_URL` if the API is not at `http://localhost:8080`.
+
+> Independent portfolio project — not affiliated with, endorsed by, or containing data from
+> U.S. Soccer or any member organization. All data is fictional.
