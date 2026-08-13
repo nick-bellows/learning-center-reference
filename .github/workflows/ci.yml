@@ -4,22 +4,45 @@ on:
   push:
   pull_request:
 
-# The pipeline is green from the first commit and tightens as each part lands.
-# The rule: never let the baseline go red. Add a job only when it can pass.
-
 jobs:
-  scaffold:
+  api:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: api
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.26"
+          cache-dependency-path: api/go.sum
+      - run: go vet ./...
+      - run: go test ./...   # unit tests; the store integration test skips without DATABASE_URL
+
+  web:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    env:
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+      - run: npm run build
+
+  compose:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Validate compose file
-        run: docker compose config -q
+      - run: docker compose config -q
 
-  # Added in Step 2 (once api/ and web/ have code):
-  #   api:     go vet ./... ; golangci-lint run ; go test ./...
-  #   web:     pnpm lint ; pnpm exec tsc --noEmit ; pnpm test
-  #   openapi: redocly lint api/api/openapi.yaml
-  #
-  # Added in Week 2 (once there are pages to test and images to build):
-  #   a11y:    playwright + @axe-core/playwright against the dev server
-  #   build:   docker build ./api and ./web
+  # Added later as those parts land:
+  #   a11y    -> playwright + @axe-core/playwright against the dev server
+  #   openapi -> redocly lint api/api/openapi.yaml (once the spec exists)
+  #   build   -> docker build ./api (image publish)
