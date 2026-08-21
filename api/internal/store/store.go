@@ -38,6 +38,12 @@ func New(ctx context.Context, databaseURL string) (*Store, error) {
 // Close releases the pool. main() defers this so it runs on shutdown.
 func (s *Store) Close() { s.pool.Close() }
 
+// Pool exposes the underlying pool for setup tasks (migrations, seeding).
+func (s *Store) Pool() *pgxpool.Pool { return s.pool }
+
+// Ping verifies the database is reachable — what /health reports on.
+func (s *Store) Ping(ctx context.Context) error { return s.pool.Ping(ctx) }
+
 // LoadSafeguardingInputs gathers a member's safeguarding facts into the shape the
 // eligibility engine expects. A missing row becomes a nil pointer ("not on file"), which
 // Evaluate treats as not-current.
@@ -85,8 +91,48 @@ func (s *Store) LoadSafeguardingInputs(ctx context.Context, memberID string) (sa
 		return in, fmt.Errorf("iterating holds: %w", err)
 	}
 
-	// Role-credential (license/recert) enforcement arrives with the M3 license model.
-	in.RoleCredentialRequired = false
+	// Role credentials: coach and referee roles each require a current
+	// credential (coaching license / referee recertification). For each such
+	// role the member holds, take their LATEST credential expiry for that
+	// role; across roles the WEAKEST LINK wins — one role with no credential
+	// at all means "missing", otherwise the earliest of the latest expiries
+	// is the date that matters.
+	credRows, err := s.pool.Query(ctx, `
+		select mr.role, max(rc.expires_at)
+		from member_role mr
+		left join role_credential rc
+		  on rc.member_id = mr.member_id and rc.role = mr.role
+		where mr.member_id = $1::uuid and mr.role in ('coach','referee')
+		group by mr.role`,
+		memberID)
+	if err != nil {
+		return in, fmt.Errorf("role credentials: %w", err)
+	}
+	defer credRows.Close()
+	missing := false
+	var weakest *time.Time
+	for credRows.Next() {
+		var role string
+		var latest sql.NullTime
+		if err := credRows.Scan(&role, &latest); err != nil {
+			return in, fmt.Errorf("scanning role credential: %w", err)
+		}
+		in.RoleCredentialRequired = true
+		if !latest.Valid {
+			missing = true // this role has no credential on file at all
+			continue
+		}
+		t := latest.Time
+		if weakest == nil || t.Before(*weakest) {
+			weakest = &t
+		}
+	}
+	if err := credRows.Err(); err != nil {
+		return in, fmt.Errorf("iterating role credentials: %w", err)
+	}
+	if in.RoleCredentialRequired && !missing {
+		in.RoleCredentialExpires = weakest
+	}
 
 	return in, nil
 }

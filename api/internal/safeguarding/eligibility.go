@@ -73,12 +73,17 @@ func Evaluate(in Inputs) Decision {
 		required = append(required, cred{"role credential", in.RoleCredentialExpires})
 	}
 
+	// Expiry dates are INCLUSIVE: a credential whose expires_at is 2027-06-01
+	// is valid through that entire day (UTC) and flips to expired at
+	// 2027-06-02T00:00:00Z. Database DATE columns arrive as midnight
+	// timestamps, so validity runs until expiry + 1 day (+ any grace window).
 	grace := time.Duration(in.GraceDays) * 24 * time.Hour
 	for _, c := range required {
 		if c.expires == nil {
 			return Decision{StatusIneligible, "missing " + c.name}
 		}
-		if in.Now.After(c.expires.Add(grace)) {
+		deadline := c.expires.AddDate(0, 0, 1).Add(grace)
+		if !in.Now.Before(deadline) {
 			return Decision{StatusIneligible, "expired " + c.name}
 		}
 	}

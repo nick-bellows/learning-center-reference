@@ -61,6 +61,27 @@ func TestEvaluate(t *testing.T) {
 			in:   Inputs{Now: now, SafeSportExpires: ptr(future), BackgroundCheckExpires: ptr(future), RoleCredentialRequired: true, RoleCredentialExpires: ptr(past)},
 			want: StatusIneligible,
 		},
+		{
+			// Expiry dates are inclusive: expires_at = today means valid
+			// through the whole of today (UTC), even at 23:59:59.
+			name: "still valid late on the expiry date itself -> eligible",
+			in: Inputs{
+				Now:                    time.Date(2026, 8, 8, 23, 59, 59, 0, time.UTC),
+				SafeSportExpires:       ptr(time.Date(2026, 8, 8, 0, 0, 0, 0, time.UTC)),
+				BackgroundCheckExpires: ptr(future),
+			},
+			want: StatusEligible,
+		},
+		{
+			// ...and flips to expired exactly at midnight the day after.
+			name: "expired at midnight after the expiry date -> ineligible",
+			in: Inputs{
+				Now:                    time.Date(2026, 8, 9, 0, 0, 0, 0, time.UTC),
+				SafeSportExpires:       ptr(time.Date(2026, 8, 8, 0, 0, 0, 0, time.UTC)),
+				BackgroundCheckExpires: ptr(future),
+			},
+			want: StatusIneligible,
+		},
 	}
 
 	for _, tc := range cases {

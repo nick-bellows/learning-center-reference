@@ -10,6 +10,7 @@ const API_BASE = process.env.API_BASE_URL ?? "http://localhost:8080";
 const DEMO_MEMBERS = [
   { id: "11111111-1111-1111-1111-111111111111", label: "Alex Coach" },
   { id: "22222222-2222-2222-2222-222222222222", label: "Sam Referee" },
+  { id: "33333333-3333-3333-3333-333333333333", label: "Riley Referee" },
 ];
 
 // A TypeScript type describing the API's JSON shape. `status` is a union of the exact

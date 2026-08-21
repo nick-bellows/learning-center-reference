@@ -7,6 +7,8 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"regexp"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -22,10 +24,21 @@ type EligibilityLoader interface {
 	LoadSafeguardingInputs(ctx context.Context, memberID string) (safeguarding.Inputs, error)
 }
 
+// Pinger is the health check's view of the database.
+type Pinger interface {
+	Ping(ctx context.Context) error
+}
+
 // Deps holds everything the router needs handed in from outside.
 type Deps struct {
 	Eligibility EligibilityLoader
+	DB          Pinger // nil when the server runs without a database
 }
+
+// uuidRe validates the {id} path parameter BEFORE it reaches the database, so
+// a malformed id is a client error (400), not a database cast error (500).
+var uuidRe = regexp.MustCompile(
+	`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
 
 // NewRouter wires middleware + routes and returns an http.Handler.
 func NewRouter(deps Deps) http.Handler {
@@ -36,14 +49,27 @@ func NewRouter(deps Deps) http.Handler {
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
 
-	r.Get("/health", handleHealth)
+	r.Get("/health", deps.handleHealth)
 	r.Get("/v1/members/{id}/eligibility", deps.handleEligibility)
 
 	return r
 }
 
-func handleHealth(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+// handleHealth reports readiness, not just liveness: when a database is
+// configured, it must answer a ping or the endpoint returns 503.
+func (deps Deps) handleHealth(w http.ResponseWriter, r *http.Request) {
+	if deps.DB == nil {
+		writeJSON(w, http.StatusOK, map[string]string{"status": "ok", "database": "not configured"})
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
+	defer cancel()
+	if err := deps.DB.Ping(ctx); err != nil {
+		writeJSON(w, http.StatusServiceUnavailable,
+			map[string]string{"status": "degraded", "database": "unreachable"})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "ok", "database": "ok"})
 }
 
 // handleEligibility loads a member's safeguarding facts, computes eligibility, and returns it.
@@ -51,6 +77,10 @@ func handleHealth(w http.ResponseWriter, r *http.Request) {
 // function. That separation is what makes the rule easy to test on its own.
 func (deps Deps) handleEligibility(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id") // the {id} from the route
+	if !uuidRe.MatchString(id) {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid member id"})
+		return
+	}
 
 	in, err := deps.Eligibility.LoadSafeguardingInputs(r.Context(), id)
 	if err != nil {

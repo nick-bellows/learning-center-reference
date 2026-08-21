@@ -1,57 +1,94 @@
 # Learning Center Reference
 
-> Status: **draft / scaffolded.** A working reference implementation of a soccer-federation Learning Center — course delivery, coaching-education licensing, referee recertification, and safeguarding compliance — built to demonstrate full-stack engineering on a modern stack.
+> **Status: a working vertical slice, not a full product.** What runs today is
+> the safeguarding-eligibility engine end to end — Postgres → Go API → Next.js
+> — for a soccer-federation Learning Center. Everything else (courses UI,
+> Auth0, Sanity, i18n, event sourcing) is **planned** and clearly labeled so
+> below. This repo is honest about that line on purpose.
 
-**🔗 Live demo:** _coming at milestone M2_ · **Demo login:** _provided with the demo_
+> ⚠️ **Independent portfolio project — not affiliated with, endorsed by, or
+> containing data from U.S. Soccer or any member organization. All names and
+> records are fictional.**
 
-> ⚠️ **Independent portfolio project — not affiliated with, endorsed by, or containing data from U.S. Soccer or any member organization. All names and records are fictional.**
+The interesting part is not CRUD: **eligibility to participate is a *derived*
+value.** It is never stored — it is recomputed on every request from a
+member's background-check expiry, SafeSport-training expiry, role credential
+(coaching license / referee recertification), and any active disciplinary
+hold, and it flips automatically the moment any input lapses. The rule lives
+in one pure, table-driven-tested Go function; the API and UI just deliver it.
 
-A learner enrolls in courses, completes lessons and assessments, and earns verifiable certificates. An administrator sees who is compliant, who lapses in the next 30/60/90 days, and why. The interesting part is not the CRUD — it's that **eligibility to participate is a *derived* value**: it falls out of background-check expiry, safeguarding-training expiry, and (for referees) recertification status, and it flips automatically the moment any input lapses.
+## Quick start (no .env needed)
 
-## Why this exists
-
-This is a portfolio project. The domain rules are modeled on **publicly documented** youth-soccer coaching-education, refereeing, and safeguarding practice, generalized — **not** on any employer's internal system, and containing **no** real member, player, or proprietary data. All seed data is synthetic and labeled as such.
-
-## Stack
-
-| Layer | Tech | Why |
-| --- | --- | --- |
-| Web | TypeScript · Next.js (App Router) · Tailwind | Typed UI aligned to a small design-token set; responsive; `en` + `es` |
-| API | Go · chi · OpenAPI | Typed HTTP service over a documented `/v1` contract |
-| Data | PostgreSQL · golang-migrate | Relational core with versioned migrations |
-| Auth | Auth0 (OIDC) | Roles: learner / instructor / admin |
-| Content | Sanity CMS | Course/lesson content authored as structured documents, not hand-built CRUD |
-| Progress | Append-only event log + projection | Event sourcing in one bounded context only |
-| Delivery | Docker · AWS · GitHub Actions | Reproducible build; CI gates lint, types, tests, accessibility |
-| Access | WCAG 2.1 AA target | Accessibility is tested in CI, not asserted |
-
-## Quick start
-
-```powershell
-Copy-Item .env.example .env   # fill in local values; never commit .env
-docker compose up db          # Postgres comes up first (localhost-only)
-# api and web come online as they are built out — see docs/ and the milestones below
+```sh
+git clone https://github.com/nick-bellows/learning-center-reference
+cd learning-center-reference
+docker compose up --build
 ```
+
+Then open **http://localhost:3000/members** — three synthetic members,
+computed live, one of each status:
+
+![Members page: three live statuses](docs/assets/members-page.jpg)
+
+| Member | Status | Why |
+| --- | --- | --- |
+| Alex Coach | `eligible` | background check, SafeSport, and coaching license all current |
+| Sam Referee | `suspended` | an **active disciplinary hold** overrides current credentials |
+| Riley Referee | `ineligible_lapsed` | referee **recertification expired** — current checks don't save you |
+
+API directly: `curl localhost:8080/v1/members/33333333-3333-3333-3333-333333333333/eligibility`
+· `/health` pings the database (503 when it's down). The API applies its
+embedded migrations and the idempotent synthetic seed on startup.
+
+## Implemented vs planned
+
+| Piece | Status |
+| --- | --- |
+| Domain rule: derived eligibility (holds → credentials → grace), inclusive expiry dates, boundary-tested | **implemented** |
+| Go API: chi router, request-validated ids (400), 404 vs 500 separation, HTTP timeouts, graceful shutdown, DB-aware `/health` | **implemented** |
+| PostgreSQL: 4 versioned migrations, embedded startup migration runner, synthetic idempotent seed | **implemented** |
+| Next.js 16 web: server-component members page rendering live statuses | **implemented** |
+| Docker: distroless non-root API image, standalone non-root web image, one-command compose | **implemented** |
+| CI: Go vet/tests **with a real Postgres**, govulncheck, web lint/build, and an e2e job that runs the quickstart verbatim and asserts all three statuses | **implemented** |
+| Course delivery UI, enrollment flows (schema exists; no UI/endpoints) | planned |
+| Auth0 (OIDC) login and roles | planned |
+| Sanity CMS course content | planned |
+| Event-sourced learner progress | planned |
+| `es` locale, WCAG 2.1 AA test gate, OpenAPI spec | planned |
+| Cloud deployment | planned (`docs/deploy.md` documents the Fly.io path) |
+
+## The domain rule, in one paragraph
+
+A hold beats everything: any active disciplinary hold → `suspended`. Otherwise
+every required credential must be on file and current: SafeSport and a
+background check always; a role credential for members holding a
+credential-requiring role (coach, referee), where the **weakest link wins**
+across roles. Expiry dates are **inclusive** — a credential expiring
+`2027-06-01` is valid through that entire day (UTC) and flips at midnight
+after, with an optional grace window; the boundary is unit-tested, not
+assumed. See `api/internal/safeguarding/eligibility.go` and
+`docs/domain-model.md`.
 
 ## Repository map
 
 ```text
-docs/     Architecture, the domain model (read this first), accessibility
-api/      Go service (chi + OpenAPI) over Postgres
-web/      Next.js + TypeScript + Tailwind, en/es
-studio/   Sanity schema for course content
-db/       Synthetic seed data (labeled)
-scripts/  One-command dev + local check helpers
+docs/     Domain model (read first), ADRs, deploy notes
+api/      Go service: httpapi (router), safeguarding (the rule), store (pgx),
+          dbsetup (embedded migration runner), migrations/
+web/      Next.js 16 + TypeScript + Tailwind members page
+db/       Synthetic seed (labeled, idempotent)
 ```
 
 ## Milestones
 
-- [ ] **M0 — Foundation:** repo scaffold, compose, CI green. *(in progress)*
-- [ ] **M1 — Domain model:** `docs/domain-model.md` written and reviewed before any schema.
-- [ ] **M2 — Vertical slice:** sign in → view course → complete lesson → progress persists.
-- [ ] **M3 — Compliance:** coaching/referee/safeguarding rules, derived status, admin dashboard.
-- [ ] **M4 — Release:** certificates, `es` locale, WCAG write-up, live demo, README polish.
+- [x] **M0 — Foundation:** repo scaffold, compose, CI green
+- [x] **M1 — Domain model:** `docs/domain-model.md` written before any schema
+- [x] **M2 — Safeguarding vertical slice:** db → API → web, e2e-tested in CI *(this is where the repo is now)*
+- [ ] **M3 — Courses & enrollment:** course player, progress, admin roster
+- [ ] **M4 — Release:** Auth0, certificates, `es`, WCAG gate, live demo
 
 ## Disclaimer
 
-Educational reference implementation. Not affiliated with, endorsed by, or containing data from any soccer federation or member organization.
+Educational reference implementation. Synthetic data only. Not affiliated
+with, endorsed by, or containing data from any soccer federation or member
+organization.

@@ -10,6 +10,24 @@ jobs:
     defaults:
       run:
         working-directory: api
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: lcr
+          POSTGRES_PASSWORD: ci-only
+          POSTGRES_DB: lcr
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U lcr"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    env:
+      # With a real Postgres present, the store INTEGRATION test runs instead
+      # of skipping — the skip never hides a break in CI.
+      DATABASE_URL: postgres://lcr:ci-only@localhost:5432/lcr?sslmode=disable
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -17,7 +35,9 @@ jobs:
           go-version: "1.26"
           cache-dependency-path: api/go.sum
       - run: go vet ./...
-      - run: go test ./...   # unit tests; the store integration test skips without DATABASE_URL
+      - run: go test ./...
+      - name: govulncheck (reachable vulnerabilities fail the build)
+        run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
 
   web:
     runs-on: ubuntu-latest
@@ -34,15 +54,46 @@ jobs:
           cache: npm
           cache-dependency-path: web/package-lock.json
       - run: npm ci
+      - run: npm run lint
       - run: npm run build
 
-  compose:
+  # The quickstart is a CLAIM the README makes; this job executes it verbatim
+  # and asserts all three demo statuses render end to end (db -> api -> web).
+  e2e:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: docker compose config -q
-
-  # Added later as those parts land:
-  #   a11y    -> playwright + @axe-core/playwright against the dev server
-  #   openapi -> redocly lint api/api/openapi.yaml (once the spec exists)
-  #   build   -> docker build ./api (image publish)
+      - run: docker compose up -d --build
+      - name: wait for the API to be ready (health includes a DB ping)
+        run: |
+          for i in $(seq 1 60); do
+            curl -sf http://localhost:8080/health && exit 0
+            sleep 2
+          done
+          echo "API never became healthy"; exit 1
+      - name: eligibility endpoint returns all three statuses
+        run: |
+          set -e
+          curl -s http://localhost:8080/v1/members/11111111-1111-1111-1111-111111111111/eligibility | grep -q '"eligible"'
+          curl -s http://localhost:8080/v1/members/22222222-2222-2222-2222-222222222222/eligibility | grep -q '"suspended"'
+          curl -s http://localhost:8080/v1/members/33333333-3333-3333-3333-333333333333/eligibility | grep -q '"ineligible_lapsed"'
+      - name: malformed id is a 400, unknown member a 404
+        run: |
+          set -e
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8080/v1/members/not-a-uuid/eligibility)" = "400"
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8080/v1/members/99999999-9999-9999-9999-999999999999/eligibility)" = "404"
+      - name: web renders the live statuses
+        run: |
+          for i in $(seq 1 30); do
+            curl -sf http://localhost:3000/members > page.html && break
+            sleep 2
+          done
+          set -e
+          grep -q 'Riley Referee' page.html
+          grep -q 'ineligible_lapsed' page.html
+          grep -q 'suspended' page.html
+      - name: stack logs on failure
+        if: failure()
+        run: docker compose logs --tail 100
+      - run: docker compose down -v
+        if: always()
