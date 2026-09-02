@@ -11,10 +11,12 @@ RUN go mod download
 COPY . .
 # CGO disabled + static build so the binary runs on the minimal base below.
 RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /out/server ./cmd/server
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /out/resetdemo ./cmd/resetdemo
 
 # --- run stage ---
 FROM gcr.io/distroless/static-debian12:nonroot AS run
 COPY --from=build /out/server /server
+COPY --from=build /out/resetdemo /resetdemo
 EXPOSE 8080
 USER nonroot:nonroot
 ENTRYPOINT ["/server"]

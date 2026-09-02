@@ -1,0 +1,49 @@
+# Local standards-based login overlay. This fixture exercises Authorization Code
+# + PKCE, signed JWT verification, callback/session handling, logout, and
+# database-resolved roles without creating an external identity-provider account.
+# It is deliberately local-only and must never be used as an internet IdP.
+services:
+  oidc:
+    build:
+      context: ./api
+      dockerfile: Dockerfile.oidc
+    environment:
+      OIDC_FIXTURE_ISSUER: http://oidc.localhost:5556
+      OIDC_FIXTURE_CLIENT_ID: learning-center-web
+      OIDC_FIXTURE_AUDIENCE: learning-center-api
+      OIDC_FIXTURE_REDIRECT_URI: http://localhost:${WEB_PORT:-3000}/api/auth/callback
+    ports:
+      - "127.0.0.1:5556:5556"
+    networks:
+      default:
+        aliases:
+          - oidc.localhost
+
+  api:
+    depends_on:
+      db:
+        condition: service_healthy
+      oidc:
+        condition: service_healthy
+    environment:
+      DEPLOYMENT_ENV: local
+      AUTH_MODE: oidc
+      OIDC_ISSUER_URL: http://oidc.localhost:5556
+      OIDC_AUDIENCE: learning-center-api
+      RATE_LIMIT_PER_MINUTE: "120"
+
+  web:
+    depends_on:
+      api:
+        condition: service_started
+      oidc:
+        condition: service_healthy
+    environment:
+      WEB_DEPLOYMENT_ENV: local
+      WEB_AUTH_MODE: oidc
+      API_BASE_URL: http://api:8080
+      APP_BASE_URL: http://localhost:${WEB_PORT:-3000}
+      OIDC_ISSUER_URL: http://oidc.localhost:5556
+      OIDC_CLIENT_ID: learning-center-web
+      OIDC_AUDIENCE: learning-center-api
+      SESSION_SECRET: local-oidc-session-secret-change-before-public-deploy

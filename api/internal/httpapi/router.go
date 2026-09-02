@@ -46,12 +46,14 @@ type Pinger interface {
 
 // Deps holds dependencies created by main and injected into the router.
 type Deps struct {
-	Eligibility EligibilityLoader
-	Identity    IdentityResolver
-	Learning    LearningStore
-	Auth        authn.Verifier
-	DB          Pinger
-	Logger      *slog.Logger
+	Eligibility        EligibilityLoader
+	Identity           IdentityResolver
+	Learning           LearningStore
+	Auth               authn.Verifier
+	DB                 Pinger
+	Logger             *slog.Logger
+	RateLimitPerMinute int
+	TrustProxy         bool
 }
 
 type memberContextKey struct{}
@@ -73,6 +75,11 @@ func NewRouter(deps Deps) http.Handler {
 	r.Use(deps.requestLogger)
 	r.Use(middleware.Recoverer)
 	r.Use(securityHeaders)
+	r.Use(middleware.RequestSize(1 << 20))
+	r.Use(middleware.Throttle(64))
+	if deps.RateLimitPerMinute > 0 {
+		r.Use(newClientRateLimiter(deps.RateLimitPerMinute, time.Minute, deps.TrustProxy).middleware)
+	}
 
 	r.Get("/health", deps.handleHealth)
 	r.Get("/v1/members/{id}/eligibility", deps.handleEligibility)
@@ -92,6 +99,10 @@ func NewRouter(deps Deps) http.Handler {
 func securityHeaders(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Content-Type-Options", "nosniff")
+		w.Header().Set("X-Frame-Options", "DENY")
+		w.Header().Set("Referrer-Policy", "no-referrer")
+		w.Header().Set("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+		w.Header().Set("Content-Security-Policy", "default-src 'none'; frame-ancestors 'none'")
 		w.Header().Set("Cache-Control", "no-store")
 		next.ServeHTTP(w, r)
 	})

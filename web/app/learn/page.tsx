@@ -1,17 +1,32 @@
 import { completeLessonAction, enrollAction } from "./actions";
-import { getCourses, getDashboard } from "@/lib/api";
+import { APIRequestError, AuthenticationRequired, getCourses, getDashboard } from "@/lib/api";
 
 export default async function LearnPage() {
   let data;
   try {
     const [courses, dashboard] = await Promise.all([getCourses(), getDashboard()]);
     data = { courses, dashboard };
-  } catch {
+  } catch (error) {
+    if (error instanceof AuthenticationRequired || (error instanceof APIRequestError && error.status === 401)) {
+      return (
+        <main className="page-shell">
+          <p className="eyebrow">Learner workspace</p>
+          <h1>Sign in as the fictional learner</h1>
+          <p className="lede max-w-2xl">
+            The guided demo uses an explicit OIDC sign-in. Choose Alex Coach at the local test
+            provider; the application role is still resolved from PostgreSQL.
+          </p>
+          <a className="button button-primary mt-6" href="/api/auth/login?returnTo=/learn">
+            Sign in to the learner demo
+          </a>
+        </main>
+      );
+    }
     return (
       <main className="page-shell">
         <p className="eyebrow">Learner workspace</p>
         <h1>Course service unavailable</h1>
-        <p className="lede">Start the local API and PostgreSQL services, then reload this page.</p>
+        <p className="lede">The application could not safely load course data. Try again after the services are healthy.</p>
       </main>
     );
   }
@@ -27,7 +42,7 @@ export default async function LearnPage() {
           <h1>Welcome back, {data.dashboard.member.display_name}</h1>
           <p className="lede max-w-2xl">
             Your identity was verified at the API boundary and the learner role below was
-            resolved from PostgreSQL—not accepted from the request.
+            resolved from PostgreSQL, not accepted from the request.
           </p>
         </div>
         <span className="role-chip">learner</span>
@@ -55,14 +70,7 @@ export default async function LearnPage() {
                 <span>Progress</span>
                 <span>{enrollment.percent_complete}%</span>
               </div>
-              <div
-                className="progress-track"
-                role="progressbar"
-                aria-label={`${enrollment.course_title} progress`}
-                aria-valuemin={0}
-                aria-valuemax={100}
-                aria-valuenow={enrollment.percent_complete}
-              >
+              <div className="progress-track" role="progressbar" aria-label={`${enrollment.course_title} progress`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={enrollment.percent_complete}>
                 <div className="progress-fill" style={{ width: `${enrollment.percent_complete}%` }} />
               </div>
             </div>
@@ -75,7 +83,7 @@ export default async function LearnPage() {
                   <li className="lesson-row" key={lesson.id}>
                     <div className="flex items-start gap-3">
                       <span className={lesson.completed ? "lesson-number lesson-done" : "lesson-number"} aria-hidden="true">
-                        {lesson.completed ? "✓" : lesson.position}
+                        {lesson.completed ? "OK" : lesson.position}
                       </span>
                       <div>
                         <h3>{lesson.title}</h3>
@@ -110,7 +118,7 @@ export default async function LearnPage() {
               <article className="card" key={course.id}>
                 <h3>{course.title}</h3>
                 <p className="mt-2 text-sm text-slate-600">
-                  {course.lesson_count} lessons · {course.ordering} order
+                  {course.lesson_count} lessons &middot; {course.ordering} order
                 </p>
                 <form action={enrollAction} className="mt-5">
                   <input type="hidden" name="courseId" value={course.id} />

@@ -36,6 +36,8 @@ jobs:
           cache-dependency-path: api/go.sum
       - run: go vet ./...
       - run: go test ./...
+      - name: race detector
+        run: go test -race ./...
       - name: govulncheck (reachable vulnerabilities fail the build)
         run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
 
@@ -119,6 +121,10 @@ jobs:
           grep -q 'suspended' page.html
           curl -sf http://localhost:3000/learn | grep -q 'Grassroots Match-Day Safety'
           curl -sf http://localhost:3000/admin/compliance | grep -q 'Casey Admin'
+      - name: scoped demo reset clears mutable enrollment state
+        run: |
+          docker compose exec -T -e RESET_CONFIRM=synthetic-demo api /resetdemo
+          test "$(docker compose exec -T -e PGPASSWORD=change-me-locally db psql -U lcr -d lcr -tAc 'select count(*) from enrollment')" = "0"
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
@@ -132,10 +138,50 @@ jobs:
       - name: WCAG A/AA automated checks on all four routes
         working-directory: web
         env:
-          PLAYWRIGHT_BASE_URL: http://127.0.0.1:3000
+          PLAYWRIGHT_BASE_URL: http://localhost:3000
         run: npm run test:a11y
       - name: stack logs on failure
         if: failure()
         run: docker compose logs --tail 100
       - run: docker compose down -v
         if: always()
+
+  oidc-e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: start local standards-based OIDC stack
+        run: docker compose -f compose.yml -f compose.oidc.yml up -d --build
+      - name: wait for API and web
+        run: |
+          for i in $(seq 1 60); do
+            curl -sf http://localhost:8080/health >/dev/null && curl -sf http://localhost:3000/ >/dev/null && exit 0
+            sleep 2
+          done
+          echo "OIDC stack never became ready"; exit 1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: install browser-test dependencies
+        working-directory: web
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+      - name: exercise learner login, authorization denial, logout, and administrator login
+        working-directory: web
+        env:
+          PLAYWRIGHT_BASE_URL: http://localhost:3000
+          PLAYWRIGHT_OIDC: "1"
+        run: npm run test:auth
+      - name: read-only deployment smoke boundary
+        run: python scripts/smoke_public_demo.py --app-url http://localhost:3000 --api-url http://localhost:8080 --issuer-host oidc.localhost:5556
+      - name: scoped reset remains executable
+        run: docker compose -f compose.yml -f compose.oidc.yml exec -T -e RESET_CONFIRM=synthetic-demo api /resetdemo
+      - name: stack logs on failure
+        if: failure()
+        run: docker compose -f compose.yml -f compose.oidc.yml logs --tail 100
+      - name: stop stack and remove synthetic state
+        if: always()
+        run: docker compose -f compose.yml -f compose.oidc.yml down -v

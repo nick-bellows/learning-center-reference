@@ -11,9 +11,7 @@ import (
 	"time"
 )
 
-// Status is the computed participation status. It's a named type over string (not a bare
-// string) so the compiler stops us accidentally mixing it up with ordinary text — the same
-// idea as a C# enum, but backed by readable string values.
+// Status is the computed participation status.
 type Status string
 
 const (
@@ -26,9 +24,7 @@ const (
 
 // Inputs are the facts about ONE adult participant, evaluated as of Now.
 //
-// The *time.Time fields are pointers so they can be nil when the item is not on file —
-// Go's equivalent of a C# nullable (DateTime?). Passing Now in, instead of calling
-// time.Now() inside, makes the function deterministic and trivial to test.
+// Missing credentials are nil. Passing Now explicitly keeps evaluation deterministic.
 type Inputs struct {
 	Now                    time.Time
 	SafeSportExpires       *time.Time // nil = no SafeSport on file
@@ -36,9 +32,8 @@ type Inputs struct {
 	ActiveHoldSources      []string   // e.g. ["safesport"]; empty = no active holds
 	GraceDays              int        // days after expiry still allowed (0 = flip exactly on expiry)
 
-	// Role credential = a coaching license or referee recertification. It only applies to
-	// roles that require one, and it isn't modeled until M3 — so it's evaluated only when
-	// RoleCredentialRequired is true.
+	// A coaching license or referee recertification applies only when the member's role
+	// requires it.
 	RoleCredentialRequired bool
 	RoleCredentialExpires  *time.Time // nil = none on file
 }

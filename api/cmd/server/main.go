@@ -13,8 +13,10 @@ import (
 	"log"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -31,9 +33,20 @@ func main() {
 	defer stop()
 
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
-	deps := httpapi.Deps{Logger: logger}
-	if url := os.Getenv("DATABASE_URL"); url != "" {
-		st, err := store.New(ctx, url)
+	authMode := strings.ToLower(envOr("AUTH_MODE", "disabled"))
+	databaseURL := os.Getenv("DATABASE_URL")
+	if err := validateDeploymentConfig(
+		envOr("DEPLOYMENT_ENV", "local"), authMode, databaseURL, os.Getenv("OIDC_ISSUER_URL"),
+	); err != nil {
+		log.Fatalf("configuration: %v", err)
+	}
+	deps := httpapi.Deps{
+		Logger:             logger,
+		RateLimitPerMinute: envIntOr("RATE_LIMIT_PER_MINUTE", 120),
+		TrustProxy:         os.Getenv("TRUST_PROXY") == "1",
+	}
+	if databaseURL != "" {
+		st, err := store.New(ctx, databaseURL)
 		if err != nil {
 			log.Fatalf("database: %v", err)
 		}
@@ -65,7 +78,7 @@ func main() {
 		log.Println("DATABASE_URL not set; database-backed routes will be unavailable")
 	}
 
-	verifier, err := configureAuth(ctx)
+	verifier, err := configureAuth(ctx, authMode)
 	if err != nil {
 		log.Fatalf("authentication: %v", err)
 	}
@@ -91,7 +104,7 @@ func main() {
 		log.Fatal(err)
 	case <-ctx.Done():
 		// Graceful shutdown: stop accepting, let in-flight requests finish.
-		log.Println("shutting down…")
+		log.Println("shutting down")
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 		if err := srv.Shutdown(shutdownCtx); err != nil && !errors.Is(err, context.DeadlineExceeded) {
@@ -100,8 +113,8 @@ func main() {
 	}
 }
 
-func configureAuth(ctx context.Context) (authn.Verifier, error) {
-	switch strings.ToLower(envOr("AUTH_MODE", "disabled")) {
+func configureAuth(ctx context.Context, authMode string) (authn.Verifier, error) {
+	switch authMode {
 	case "disabled":
 		log.Println("AUTH_MODE=disabled; protected routes fail closed with 503")
 		return authn.UnavailableVerifier{}, nil
@@ -118,10 +131,42 @@ func configureAuth(ctx context.Context) (authn.Verifier, error) {
 	}
 }
 
+func validateDeploymentConfig(deploymentEnv, authMode, databaseURL, issuer string) error {
+	if deploymentEnv != "local" && deploymentEnv != "public" {
+		return fmt.Errorf("DEPLOYMENT_ENV must be local or public, got %q", deploymentEnv)
+	}
+	if deploymentEnv != "public" {
+		return nil
+	}
+	if authMode != "oidc" {
+		return errors.New("public deployment requires AUTH_MODE=oidc")
+	}
+	if strings.TrimSpace(databaseURL) == "" {
+		return errors.New("public deployment requires DATABASE_URL")
+	}
+	parsed, err := url.Parse(issuer)
+	if err != nil || parsed.Scheme != "https" || parsed.Host == "" {
+		return errors.New("public deployment requires an HTTPS OIDC_ISSUER_URL")
+	}
+	return nil
+}
+
 // envOr returns the environment variable named key, or def if it is unset/empty.
 func envOr(key, def string) string {
 	if v := os.Getenv(key); v != "" {
 		return v
 	}
 	return def
+}
+
+func envIntOr(key string, def int) int {
+	value := os.Getenv(key)
+	if value == "" {
+		return def
+	}
+	parsed, err := strconv.Atoi(value)
+	if err != nil || parsed < 1 {
+		log.Fatalf("%s must be a positive integer", key)
+	}
+	return parsed
 }

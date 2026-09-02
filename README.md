@@ -3,8 +3,9 @@
 > **Status: working portfolio vertical slice.** A synthetic learner can authenticate,
 > resolve a database role, browse a course, enroll, complete ordered lessons, and see
 > persisted progress. A synthetic administrator can inspect eligibility derived live
-> from safeguarding and credential records. Hosted login, CMS content, certificates,
-> and cloud deployment remain explicitly out of scope.
+> from safeguarding and credential records. A local OIDC fixture now proves the browser
+> redirect/session/logout path. External-provider login, CMS content, certificates, and
+> cloud deployment remain explicitly unclaimed.
 
 > **Independent portfolio project — not affiliated with, endorsed by, or containing
 > data from U.S. Soccer or any member organization. Every name and record is fictional.**
@@ -27,8 +28,9 @@ admin identity → PostgreSQL admin role → current credential facts
 
 - The API validates OIDC signature, issuer, audience, and expiry in `AUTH_MODE=oidc`.
 - Application roles come from PostgreSQL—not token claims or request parameters.
-- Local Docker uses an explicit demo verifier with two fixed synthetic identities; those
-  identifiers are not production credentials and never leave the server-rendered web app.
+- The default local stack uses an explicit demo verifier; the optional OIDC overlay exercises
+  Authorization Code + PKCE, signed tokens, callback/session handling, and explicit role switching
+  with two fixed fictional identities. Neither local mode is suitable for internet exposure.
 - Enrollment and lesson-completion retries are idempotent.
 - Sequential courses reject an out-of-order completion with `409 Conflict`.
 - An append-only `progress_event` record and its `enrollment_progress` projection update
@@ -43,17 +45,19 @@ admin identity → PostgreSQL admin role → current credential facts
 ```mermaid
 flowchart LR
     Browser[Browser] --> Web[Next.js / TypeScript\nServer Components + Actions]
+    Browser -->|Authorization Code + PKCE| IdP[OIDC provider]
+    IdP -->|Callback + signed tokens| Web
     Web -->|Bearer token, server side| API[Go / chi API]
-    IdP[Auth0 or OIDC provider] -->|Discovery + signed JWT| API
+    API -->|Discovery + JWKS validation| IdP
     API -->|Resolve subject and roles| PG[(PostgreSQL)]
     API -->|Append completion| Events[(progress_event)]
     Events -->|Same transaction| Projection[(enrollment_progress)]
     API -->|Derived safeguarding status| Web
 ```
 
-The local demo substitutes fixed synthetic subjects for the external identity provider so
-a clean clone needs no account or secret. Production-mode verification is implemented,
-but the hosted browser redirect/session flow is not claimed as complete.
+The default local demo substitutes fixed synthetic subjects so a clean clone needs no account
+or secret. `compose.oidc.yml` supplies a standards-based local provider and proves the complete
+browser boundary without pretending it is Auth0. Hosted-provider interoperability is not claimed.
 
 ## Quick start
 
@@ -75,20 +79,30 @@ Open:
 The API embeds and applies migrations, then loads an idempotent synthetic seed. Ports bind
 to `127.0.0.1`; Compose does not expose the demo outside the local machine.
 
+To exercise real redirect/callback/session behavior locally, use the OIDC overlay:
+
+```sh
+docker compose -f compose.yml -f compose.oidc.yml up --build
+```
+
+Open `/learn`, sign in as Alex Coach, then sign out and choose Casey Admin for the administrator
+path. The guided landing page links each UI behavior to its implementation and tests. Run
+`./scripts/reset-demo.ps1` from PowerShell to clear mutable fictional enrollment/progress state.
+
 ## What is implemented
 
 | Capability | Evidence |
 | --- | --- |
 | Go REST API and contract | `api/internal/httpapi`, semantically validated `api/openapi.yaml` |
-| Authentication and RBAC | OIDC verifier plus explicit demo adapter in `api/internal/authn`; roles resolved by `internal/store` |
+| Authentication and RBAC | OIDC verifier, Authorization Code + PKCE web session, local provider fixture, explicit demo adapter; roles resolved by `internal/store` |
 | Course workflow | Published catalog, idempotent enrollment, sequential lesson completion, learner dashboard |
 | PostgreSQL state | Five versioned migrations, embedded transactional runner, idempotent synthetic seed |
 | Bounded event sourcing | Immutable completion events and transactional progress projection in migration `0005` |
 | Eligibility | Pure, boundary-tested Go rule derived from expiring facts and active holds |
 | Administrator workflow | Role-protected compliance roster with current reasons and earliest credential expiry |
 | Web and accessibility | Next.js 16, TypeScript, semantic UI, keyboard focus/reduced motion, automated axe WCAG A/AA gate |
-| Operations | JSON request logs without tokens/PII, DB-aware health check, timeouts, graceful shutdown |
-| Delivery | Non-root container images; GitHub Actions for vet/tests, real-Postgres integration, vulnerability checks, web build, Compose e2e, and accessibility |
+| Operations | JSON request logs without tokens/PII, DB-aware health check, timeouts, graceful shutdown, request/body limits, scoped demo reset |
+| Delivery | Non-root container images; GitHub Actions for vet/race/tests, real-Postgres integration, vulnerability checks, web build, Compose/OIDC e2e, and accessibility |
 
 ## Verification
 
@@ -122,6 +136,8 @@ view, and all four rendered routes. See `.github/workflows/ci.yml`.
 - [Confine event sourcing to learner progress](docs/decisions/0003-event-sourcing-scope.md)
 - [Historical hosting option](docs/decisions/0004-hosting-vercel-fly-auth0-sanity.md)
 - [One bounded recruiter deployment](docs/decisions/0005-one-bounded-recruiter-deployment.md)
+- [Local OIDC and public-demo boundary](docs/decisions/0006-local-oidc-and-public-demo-boundary.md)
+- [Prepared recruiter-demo runbook](docs/deploy-recruiter-demo.md)
 - [Domain model and assumptions](docs/domain-model.md)
 - [Interview guide](docs/INTERVIEW_GUIDE.md)
 
@@ -136,12 +152,14 @@ view, and all four rendered routes. See `.github/workflows/ci.yml`.
   would protect member-level eligibility and apply organization-level authorization.
 - `.env` files are ignored. No real member data, provider secrets, or cloud credentials are
   required or committed.
+- Public-mode startup rejects demo auth, HTTP application/provider URLs, missing confidential
+  client/session secrets, and the known local placeholder.
 
 ## Deliberate limitations
 
 - No hosted demo or paid cloud resources have been created.
-- OIDC token verification is real; browser login/callback/session management still needs an
-  identity-provider tenant and is not simulated as finished.
+- Browser OIDC login/callback/session/logout is proven against the local fixture. No Auth0 tenant
+  or other hosted provider has been created or verified.
 - `content_ref` is the headless-CMS integration seam; no Sanity project is provisioned.
 - Assessment attempts, passing scores, credentials issued from course completion,
   certificates, i18n, uploads, notifications, and organization tenancy are not implemented.
@@ -163,8 +181,8 @@ docs/     Domain model, ADRs, screenshots, deployment notes, interview guide
 
 ## Next bounded milestone
 
-Connect a real Auth0 development tenant to the existing OIDC verifier and Next.js session
-boundary, then add an integration test against a local standards-compliant OIDC fixture.
-That requires external credentials, so it is intentionally not represented as completed.
+Add assessment attempts and a passing rule, then issue an expiring credential that changes the
+derived eligibility roster and audit history. A hosted recruiter demo is separately prepared but
+remains gated on explicit account and spending approval.
 
 No open-source license has been selected. Choose one before inviting third-party reuse.

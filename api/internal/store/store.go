@@ -15,8 +15,7 @@ import (
 	"github.com/nick-bellows/learning-center-reference/api/internal/safeguarding"
 )
 
-// ErrNotFound is returned when a requested record does not exist. Callers use errors.Is
-// to detect it (so the HTTP layer can return 404 instead of 500).
+// ErrNotFound is returned when a requested record does not exist.
 var ErrNotFound = errors.New("not found")
 
 // ErrForbidden means the authenticated member does not own the requested resource.
@@ -25,18 +24,15 @@ var ErrForbidden = errors.New("forbidden")
 // ErrOutOfOrder means a sequential course has an unfinished earlier lesson.
 var ErrOutOfOrder = errors.New("complete earlier lessons first")
 
-// Store owns a connection pool. A pool manages many reusable connections for us, so we
-// don't open/close one per request.
+// Store owns the application's PostgreSQL connection pool.
 type Store struct {
 	pool *pgxpool.Pool
 }
 
-// New opens the pool. ctx (a context.Context) carries cancellation/deadline — the standard
-// first parameter of anything that does I/O in Go.
+// New opens the PostgreSQL pool.
 func New(ctx context.Context, databaseURL string) (*Store, error) {
 	pool, err := pgxpool.New(ctx, databaseURL)
 	if err != nil {
-		// %w wraps the underlying error so callers can still inspect it with errors.Is/As.
 		return nil, fmt.Errorf("connecting to database: %w", err)
 	}
 	return &Store{pool: pool}, nil
@@ -431,7 +427,7 @@ func earliest(values ...*time.Time) *time.Time {
 func (s *Store) LoadSafeguardingInputs(ctx context.Context, memberID string) (safeguarding.Inputs, error) {
 	in := safeguarding.Inputs{Now: time.Now().UTC()}
 
-	// Does the member exist? ($1::uuid casts the string parameter to a uuid.)
+	// Reject unknown members before loading optional safeguarding facts.
 	var one int
 	err := s.pool.QueryRow(ctx, `select 1 from member where id = $1::uuid`, memberID).Scan(&one)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -500,7 +496,7 @@ func (s *Store) LoadSafeguardingInputs(ctx context.Context, memberID string) (sa
 		}
 		in.RoleCredentialRequired = true
 		if !latest.Valid {
-			missing = true // this role has no credential on file at all
+			missing = true
 			continue
 		}
 		t := latest.Time
@@ -518,8 +514,7 @@ func (s *Store) LoadSafeguardingInputs(ctx context.Context, memberID string) (sa
 	return in, nil
 }
 
-// maxDate runs a `select max(<date>)` query and returns a *time.Time (nil when the result
-// is SQL NULL — i.e. the member has no such record). sql.NullTime models "a time, or null".
+// maxDate returns nil when the aggregate has no timestamp.
 func (s *Store) maxDate(ctx context.Context, query, memberID string) (*time.Time, error) {
 	var nt sql.NullTime
 	if err := s.pool.QueryRow(ctx, query, memberID).Scan(&nt); err != nil {

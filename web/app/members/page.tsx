@@ -1,7 +1,3 @@
-// A Server Component: it runs on the server, so it can call our API directly and never
-// ships this code (or the API URL) to the browser. In Next 16 a component is a Server
-// Component by default; making it `async` lets us `await` data right here.
-//
 // This rules-focused page intentionally names the three fixed synthetic examples.
 // The authenticated administrator roster comes from /v1/admin/compliance instead.
 
@@ -13,8 +9,6 @@ const DEMO_MEMBERS = [
   { id: "33333333-3333-3333-3333-333333333333", label: "Riley Referee" },
 ];
 
-// A TypeScript type describing the API's JSON shape. `status` is a union of the exact
-// strings the API can return — like a C# enum, checked at compile time.
 type Eligibility = {
   member_id: string;
   status: "eligible" | "suspended" | "ineligible_lapsed";
@@ -23,8 +17,6 @@ type Eligibility = {
 
 async function fetchEligibility(id: string): Promise<Eligibility | null> {
   try {
-    // cache: "no-store" = always ask the API fresh (this is the default in Next 16, but
-    // we're explicit). If the API is down we return null instead of crashing the page.
     const res = await fetch(`${API_BASE}/v1/members/${id}/eligibility`, {
       cache: "no-store",
     });
@@ -35,8 +27,6 @@ async function fetchEligibility(id: string): Promise<Eligibility | null> {
   }
 }
 
-// A small presentational component. Props are typed inline. It just maps a status to
-// Tailwind color classes and renders a pill.
 function StatusBadge({ status }: { status?: string }) {
   const styles: Record<string, string> = {
     eligible: "bg-green-100 text-green-800 ring-green-600/20",
@@ -52,7 +42,6 @@ function StatusBadge({ status }: { status?: string }) {
 }
 
 export default async function MembersPage() {
-  // Fetch both members in parallel, then wait for all to finish.
   const rows = await Promise.all(
     DEMO_MEMBERS.map(async (m) => ({ ...m, elig: await fetchEligibility(m.id) })),
   );

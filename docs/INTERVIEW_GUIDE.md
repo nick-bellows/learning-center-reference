@@ -13,9 +13,10 @@ enroll and append ordered lesson-completion events. The API updates a dashboard 
 in the same transaction. Administrators see eligibility computed from current credential
 facts and holds rather than a stored boolean.
 
-Local Docker replaces the external identity provider with two fixed synthetic subjects. That
-keeps the reference implementation runnable without pretending an Auth0 tenant or browser
-session exists.
+Default local Docker can map two fixed synthetic bearer identifiers. The optional OIDC overlay
+instead proves Authorization Code + PKCE, signed JWTs, nonce/state checks, an encrypted HttpOnly
+session, logout, and explicit learner/admin switching against a local-only provider fixture. It
+does not pretend that Auth0 or another hosted provider has been tested.
 
 ## Where to point an interviewer
 
@@ -23,6 +24,8 @@ session exists.
 | --- | --- |
 | HTTP and authorization boundary | `api/internal/httpapi/router.go` |
 | OIDC and fail-closed demo seam | `api/internal/authn/authn.go` |
+| Browser OIDC/session boundary | `web/app/api/auth`, `web/lib/oidc.ts`, `web/lib/session.ts` |
+| Local provider + browser E2E | `api/cmd/oidcfixture`, `web/tests/auth.spec.ts` |
 | Role and ownership resolution | `api/internal/store/store.go` |
 | Progress transaction and idempotency | `Store.CompleteLesson` in `api/internal/store/store.go` |
 | Event/projection schema | `api/migrations/0005_progress.up.sql` |
@@ -45,8 +48,8 @@ owning the domain model. The cost is more hand-written mapping than a full ORM/f
 
 The browser never needs the API base URL or the local demo bearer identifiers. Server
 Components load views and Server Actions perform mutations, while the Go API remains the
-authorization boundary. This is not a substitute for a real hosted user session; that is the
-next identity-provider-backed milestone.
+authorization boundary. The local OIDC test session proves application behavior but is not
+evidence of hosted-provider interoperability or production operation.
 
 ### PostgreSQL and parameterized pgx queries
 
@@ -80,8 +83,9 @@ are table-tested in UTC.
   again for the target enrollment.
 - **Fresh compliance:** administrator results call the pure eligibility rule over current data;
   no mutable status flag exists.
-- **Honest local identity:** the demo adapter is explicit and fail-closed production behavior
-  is retained; no unsigned JWT or auth bypass is presented as OIDC.
+- **Honest local identity:** demo mode is explicit; the OIDC fixture signs real JWTs and exercises
+  the redirect/session boundary; public configuration fails closed. The fixture is never presented
+  as Auth0 or a production identity provider.
 
 ## Likely questions to prepare for
 
@@ -107,15 +111,23 @@ independent downstream systems need the event.
 ### How is OIDC different from the local demo?
 
 OIDC mode discovers provider metadata and cryptographically verifies the token. Demo mode maps
-two fixed local identifiers to synthetic subjects and must be selected explicitly. The web
-currently lacks a hosted authorization-code callback and user session; do not call it a complete
-Auth0 login integration.
+two fixed local identifiers to synthetic subjects and must be selected explicitly. The web now
+implements Authorization Code + PKCE, callback, nonce/state verification, encrypted session, and
+logout. Those are tested locally; do not call the path an Auth0 integration until Auth0 is used.
 
 ### What does the accessibility test prove?
 
 It runs axe WCAG 2.0/2.1 A and AA rules against all four rendered routes. It proves only that
 axe found no automatically detectable violations in that run. It does not prove full WCAG 2.1
 AA conformance; manual keyboard, screen-reader, zoom, and visual review are still required.
+
+### Why is the member eligibility example unauthenticated?
+
+It is a deliberately narrow read-only reference endpoint over fixed, fictional, enumerable UUIDs
+so the eligibility rule can be inspected without an account. That choice is not appropriate for
+real member data. A production route would require authentication, organization-scoped
+authorization, non-enumerable lookup behavior, and a privacy review before returning status or
+reason fields.
 
 ### What would break at production scale?
 
@@ -128,7 +140,7 @@ authorization filters, indexes proven with query plans, and metrics around laten
 | Failure | Current behavior | Production follow-up |
 | --- | --- | --- |
 | Database unavailable | `/health` returns 503; DB-backed routes fail | Alert on readiness and error rate; use managed backups/failover |
-| Missing/invalid token | 401 without verification details | Add hosted login/session renewal |
+| Missing/invalid token | 401 without verification details; web asks for a fresh login | Consider renewal only if the bounded demo needs longer sessions |
 | Valid but unprovisioned subject | 403 | Audited invitation/provisioning workflow |
 | Learner calls admin endpoint | 403 from database role | Organization-aware policy checks |
 | Learner targets another enrollment | 403 before mutation | Retain audit event for denied access if required |
@@ -139,8 +151,7 @@ authorization filters, indexes proven with query plans, and metrics around laten
 
 ## Improvements with more time or external credentials
 
-1. Connect an Auth0 development tenant and implement authorization-code login, callback,
-   session rotation, logout, and an automated local OIDC fixture.
+1. Connect an approved hosted OIDC tenant and verify the existing callback/session/logout path.
 2. Add organization tenancy to every read/write policy and test cross-organization denial.
 3. Version published courses so lesson edits cannot silently change active enrollments.
 4. Add assessment attempts and passing rules, then issue an expiring credential whose state

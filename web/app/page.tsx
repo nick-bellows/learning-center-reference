@@ -1,5 +1,7 @@
 import Link from "next/link";
 
+const repository = "https://github.com/nick-bellows/learning-center-reference";
+
 export default function Home() {
   return (
     <main className="page-shell space-y-12">
@@ -17,10 +19,10 @@ export default function Home() {
           </div>
         </div>
         <div className="workflow-card" aria-label="Implemented workflow">
-          <span>Verified identity</span><b aria-hidden="true">→</b>
-          <span>Database role</span><b aria-hidden="true">→</b>
-          <span>Course enrollment</span><b aria-hidden="true">→</b>
-          <span>Progress events</span><b aria-hidden="true">→</b>
+          <span>Verified identity</span><b aria-hidden="true">&rarr;</b>
+          <span>Database role</span><b aria-hidden="true">&rarr;</b>
+          <span>Course enrollment</span><b aria-hidden="true">&rarr;</b>
+          <span>Progress events</span><b aria-hidden="true">&rarr;</b>
           <span>Eligibility view</span>
         </div>
       </section>
@@ -42,6 +44,47 @@ export default function Home() {
             <p>Safeguarding, background checks, role credentials, and holds determine eligibility at read time.</p>
           </article>
         </div>
+      </section>
+
+      <section aria-labelledby="tour-title">
+        <p className="eyebrow">Three-minute code tour</p>
+        <h2 id="tour-title">Follow the behavior into the implementation</h2>
+        <p className="lede max-w-3xl">
+          Each stop below points to working behavior, the code that enforces it, and the test
+          that protects the boundary.
+        </p>
+        <ol className="tour-grid mt-5">
+          <li className="card">
+            <span className="tour-step">01</span>
+            <h3>Sign in and resolve a role</h3>
+            <p>Use the learner path, then inspect OIDC verification and database-owned roles.</p>
+            <div className="evidence-links">
+              <Link href="/learn">Open learner UI</Link>
+              <a href={`${repository}/blob/main/api/internal/authn/authn.go`}>Read verifier</a>
+              <a href={`${repository}/blob/main/api/internal/httpapi/router.go`}>Trace authorization</a>
+            </div>
+          </li>
+          <li className="card">
+            <span className="tour-step">02</span>
+            <h3>Enroll and record progress</h3>
+            <p>Retry-safe writes append a bounded event and update the projection atomically.</p>
+            <div className="evidence-links">
+              <a href={`${repository}/blob/main/api/internal/store/store.go`}>Read transaction</a>
+              <a href={`${repository}/blob/main/api/migrations/0005_progress.up.sql`}>Read schema</a>
+              <a href={`${repository}/blob/main/api/internal/store/store_integration_test.go`}>Read integration test</a>
+            </div>
+          </li>
+          <li className="card">
+            <span className="tour-step">03</span>
+            <h3>Inspect derived eligibility</h3>
+            <p>Compare the administrator roster with the rule and its date-boundary tests.</p>
+            <div className="evidence-links">
+              <Link href="/admin/compliance">Open admin UI</Link>
+              <a href={`${repository}/blob/main/api/internal/safeguarding/eligibility.go`}>Read rule</a>
+              <a href={`${repository}/blob/main/api/internal/safeguarding/eligibility_test.go`}>Read tests</a>
+            </div>
+          </li>
+        </ol>
       </section>
 
       <section className="stack-strip" aria-label="Technology stack">

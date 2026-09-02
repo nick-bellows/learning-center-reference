@@ -10,19 +10,24 @@ Last verified: 2026-09-02
 | Portfolio role | Primary software-engineering and soccer-domain evidence |
 | Public claim | Local Docker and CI-verified learner/admin workflow; no hosted deployment claim |
 | Data boundary | Fictional federation, identities, courses, credentials, and eligibility facts only |
-| Technical next step | Real browser OIDC session, then assessment-to-credential issuance |
-| Presentation next step | One secure, resettable public recruiter demo |
+| Technical next step | Assessment-to-credential issuance |
+| Presentation next step | Execute the prepared secure recruiter-demo runbook after approval |
 
 The implemented slice is already meaningful: identity verification, database-backed roles, course listing, idempotent enrollment, ordered lesson completion, transactional progress events/projection, learner dashboard, and administrator compliance view. Read `README.md` and `docs/INTERVIEW_GUIDE.md` before changing scope.
 
-## Current milestone - recruiter demo boundary
+## Completed milestone - local recruiter demo boundary
 
 Goal: let a reviewer experience the existing workflow without weakening the repository's authentication, privacy, or evidence claims.
 
+Repository-side work is complete: browser OIDC redirect/callback/logout, encrypted secure-session
+handling, database role resolution, explicit identity switching, scoped reset, request/body limits,
+safe errors, guided code tour, local OIDC fixture, and browser E2E coverage. External account
+creation, hosted-provider verification, and public deployment remain deliberately gated.
+
 ### Work
 
-1. Replace the fixed demo identity handoff at the browser boundary with Auth0 redirect, callback, logout, and secure server-side session handling. Keep the current Go OIDC verifier.
-2. Add a local standards-compliant OIDC fixture so callback/session and API token behavior are testable without an external tenant.
+1. Connect the existing redirect, callback, logout, and secure session boundary to an approved hosted OIDC provider. Keep the current Go verifier.
+2. Retain the local standards-compliant OIDC fixture as the reproducible CI boundary.
 3. Define two fictional demo journeys: learner and administrator. Make role switching an explicit sign-out/sign-in action, not a request parameter or client-controlled role.
 4. Choose a reset model before exposing writes: per-session seeded tenant, scheduled reset, or tightly bounded shared data. Document the trade-off and prove one reset path.
 5. Add public-demo controls: secure cookies, restrictive redirect allowlist, environment validation, request/body limits, rate limiting, safe error pages, no token/PII logging, and a visible portfolio disclaimer.
@@ -32,7 +37,7 @@ Goal: let a reviewer experience the existing workflow without weakening the repo
 ### Acceptance criteria
 
 - A logged-out reviewer can understand the problem, fictional-data boundary, and two demo paths before signing in.
-- Authentication uses a real OIDC redirect/session in the hosted environment; `AUTH_MODE=demo` cannot start in a public deployment configuration.
+- Local authentication uses a real OIDC redirect/session; `AUTH_MODE=demo` cannot start in a public deployment configuration. Hosted verification remains pending.
 - Learner and administrator permissions are resolved server-side and covered by negative authorization tests.
 - All mutations affect synthetic data and can be reset without manual database editing.
 - The public URL opens promptly on desktop/mobile, has a keyboard-complete happy path, and exposes no secrets or stack traces.

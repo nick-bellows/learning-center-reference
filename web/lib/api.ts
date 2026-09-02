@@ -1,8 +1,15 @@
 import "server-only";
 
-const API_BASE = process.env.API_BASE_URL ?? "http://localhost:8080";
-const LEARNER_TOKEN = process.env.DEMO_LEARNER_TOKEN ?? "local-learner-token";
-const ADMIN_TOKEN = process.env.DEMO_ADMIN_TOKEN ?? "local-admin-token";
+import { getWebConfig } from "./config";
+import { readSession } from "./session";
+
+export class AuthenticationRequired extends Error {}
+
+export class APIRequestError extends Error {
+  constructor(public readonly status: number) {
+    super(`Learning Center API returned ${status}`);
+  }
+}
 
 export type Course = {
   id: string;
@@ -47,7 +54,7 @@ export type ComplianceMember = {
 };
 
 async function apiRequest<T>(path: string, token: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${API_BASE}${path}`, {
+  const response = await fetch(`${getWebConfig().apiBaseUrl}${path}`, {
     ...init,
     cache: "no-store",
     headers: {
@@ -56,24 +63,46 @@ async function apiRequest<T>(path: string, token: string, init?: RequestInit): P
     },
   });
   if (!response.ok) {
-    throw new Error(`Learning Center API returned ${response.status}`);
+    throw new APIRequestError(response.status);
   }
   return (await response.json()) as T;
 }
 
+async function accessToken(demoRole: "learner" | "admin"): Promise<string> {
+  const config = getWebConfig();
+  if (config.authMode === "demo") {
+    return demoRole === "learner"
+      ? process.env.DEMO_LEARNER_TOKEN ?? "local-learner-token"
+      : process.env.DEMO_ADMIN_TOKEN ?? "local-admin-token";
+  }
+  const session = await readSession();
+  if (!session) throw new AuthenticationRequired();
+  return session.accessToken;
+}
+
+export async function getViewerState(): Promise<{
+  authMode: "demo" | "oidc";
+  signedIn: boolean;
+  subject?: string;
+}> {
+  const config = getWebConfig();
+  const session = config.authMode === "oidc" ? await readSession() : null;
+  return { authMode: config.authMode, signedIn: config.authMode === "demo" || Boolean(session), subject: session?.subject };
+}
+
 export async function getCourses(): Promise<Course[]> {
-  const body = await apiRequest<{ courses: Course[] }>("/v1/courses", LEARNER_TOKEN);
+  const body = await apiRequest<{ courses: Course[] }>("/v1/courses", await accessToken("learner"));
   return body.courses;
 }
 
 export function getDashboard(): Promise<Dashboard> {
-  return apiRequest<Dashboard>("/v1/me/dashboard", LEARNER_TOKEN);
+  return accessToken("learner").then((token) => apiRequest<Dashboard>("/v1/me/dashboard", token));
 }
 
 export async function enroll(courseId: string): Promise<EnrollmentProgress> {
   const body = await apiRequest<{ enrollment: EnrollmentProgress }>(
     `/v1/courses/${courseId}/enrollments`,
-    LEARNER_TOKEN,
+    await accessToken("learner"),
     { method: "POST" },
   );
   return body.enrollment;
@@ -85,7 +114,7 @@ export async function completeLesson(
 ): Promise<EnrollmentProgress> {
   const body = await apiRequest<{ enrollment: EnrollmentProgress }>(
     `/v1/enrollments/${enrollmentId}/lessons/${lessonId}/complete`,
-    LEARNER_TOKEN,
+    await accessToken("learner"),
     { method: "POST" },
   );
   return body.enrollment;
@@ -94,7 +123,7 @@ export async function completeLesson(
 export async function getCompliance(): Promise<ComplianceMember[]> {
   const body = await apiRequest<{ members: ComplianceMember[] }>(
     "/v1/admin/compliance",
-    ADMIN_TOKEN,
+    await accessToken("admin"),
   );
   return body.members;
 }
