@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"errors"
 	"os"
 	"strings"
 	"testing"
@@ -31,7 +32,7 @@ func TestLoadSafeguardingInputs_Integration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("connect: %v", err)
 	}
-	defer st.Close()
+	t.Cleanup(st.Close)
 
 	if _, err := dbsetup.Migrate(ctx, st.Pool(), migrations.Files); err != nil {
 		t.Fatalf("migrate: %v", err)
@@ -74,5 +75,100 @@ func TestLoadSafeguardingInputs_Integration(t *testing.T) {
 	// Unknown member -> ErrNotFound (the HTTP layer turns this into 404).
 	if _, err := st.LoadSafeguardingInputs(ctx, "99999999-9999-9999-9999-999999999999"); err == nil {
 		t.Error("unknown member: want ErrNotFound, got nil")
+	}
+}
+
+func TestLearningWorkflow_Integration(t *testing.T) {
+	url := os.Getenv("DATABASE_URL")
+	if url == "" {
+		t.Skip("set DATABASE_URL to run (needs Postgres)")
+	}
+
+	ctx := context.Background()
+	st, err := New(ctx, url)
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	t.Cleanup(st.Close)
+	if _, err := dbsetup.Migrate(ctx, st.Pool(), migrations.Files); err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
+	seed, err := os.ReadFile("../../../db/seed/seed.sql")
+	if err != nil {
+		t.Fatalf("read seed: %v", err)
+	}
+	if err := dbsetup.ApplySeed(ctx, st.Pool(), string(seed)); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	const memberID = "99990000-0000-0000-0000-000000000001"
+	const courseID = "10000000-0000-0000-0000-000000000001"
+	const firstLessonID = "30000000-0000-0000-0000-000000000001"
+	const secondLessonID = "30000000-0000-0000-0000-000000000002"
+	const finalLessonID = "30000000-0000-0000-0000-000000000003"
+
+	// This member belongs only to the test and cascades its enrollment/events on cleanup.
+	_, _ = st.Pool().Exec(ctx, `delete from member where id = $1::uuid`, memberID)
+	if _, err := st.Pool().Exec(ctx, `
+		insert into member (id, auth_subject, display_name, association_id)
+		values ($1::uuid, 'test|workflow', 'Workflow Test (synthetic)',
+		        '00000000-0000-0000-0000-0000000000aa')`, memberID); err != nil {
+		t.Fatalf("insert member: %v", err)
+	}
+	t.Cleanup(func() {
+		_, _ = st.Pool().Exec(context.Background(), `delete from progress_event where actor_member_id = $1::uuid`, memberID)
+		_, _ = st.Pool().Exec(context.Background(), `delete from member where id = $1::uuid`, memberID)
+	})
+	if _, err := st.Pool().Exec(ctx, `insert into member_role (member_id, role) values ($1::uuid, 'learner')`, memberID); err != nil {
+		t.Fatalf("insert role: %v", err)
+	}
+
+	member, err := st.ResolveMemberBySubject(ctx, "test|workflow")
+	if err != nil || !member.HasRole("learner") {
+		t.Fatalf("resolved member = %#v, %v", member, err)
+	}
+
+	progress, created, err := st.Enroll(ctx, memberID, courseID)
+	if err != nil || !created {
+		t.Fatalf("first enroll = %#v, created=%v, err=%v", progress, created, err)
+	}
+	if progress.TotalLessons != 3 || progress.PercentComplete != 0 {
+		t.Fatalf("initial progress = %#v", progress)
+	}
+
+	retry, created, err := st.Enroll(ctx, memberID, courseID)
+	if err != nil || created || retry.EnrollmentID != progress.EnrollmentID {
+		t.Fatalf("retry enroll = %#v, created=%v, err=%v", retry, created, err)
+	}
+
+	if _, _, err := st.CompleteLesson(ctx, memberID, progress.EnrollmentID, secondLessonID); !errors.Is(err, ErrOutOfOrder) {
+		t.Fatalf("second lesson first error = %v; want ErrOutOfOrder", err)
+	}
+
+	progress, recorded, err := st.CompleteLesson(ctx, memberID, progress.EnrollmentID, firstLessonID)
+	if err != nil || !recorded || progress.CompletedLessons != 1 || progress.PercentComplete != 33 {
+		t.Fatalf("first completion = %#v, recorded=%v, err=%v", progress, recorded, err)
+	}
+	progress, recorded, err = st.CompleteLesson(ctx, memberID, progress.EnrollmentID, firstLessonID)
+	if err != nil || recorded || progress.CompletedLessons != 1 {
+		t.Fatalf("completion retry = %#v, recorded=%v, err=%v", progress, recorded, err)
+	}
+
+	if _, _, err := st.CompleteLesson(ctx, memberID, progress.EnrollmentID, secondLessonID); err != nil {
+		t.Fatalf("second completion: %v", err)
+	}
+	progress, recorded, err = st.CompleteLesson(ctx, memberID, progress.EnrollmentID, finalLessonID)
+	if err != nil || !recorded || progress.PercentComplete != 100 || progress.Status != "completed" {
+		t.Fatalf("final completion = %#v, recorded=%v, err=%v", progress, recorded, err)
+	}
+
+	dashboard, err := st.LoadDashboard(ctx, memberID)
+	if err != nil || len(dashboard.Enrollments) != 1 || len(dashboard.Enrollments[0].Lessons) != 3 {
+		t.Fatalf("dashboard = %#v, err=%v", dashboard, err)
+	}
+	for _, lesson := range dashboard.Enrollments[0].Lessons {
+		if !lesson.Completed || lesson.CompletedAt == nil {
+			t.Errorf("lesson not projected complete: %#v", lesson)
+		}
 	}
 }

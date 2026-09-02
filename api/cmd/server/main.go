@@ -9,13 +9,17 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
+	"github.com/nick-bellows/learning-center-reference/api/internal/authn"
 	"github.com/nick-bellows/learning-center-reference/api/internal/dbsetup"
 	"github.com/nick-bellows/learning-center-reference/api/internal/httpapi"
 	"github.com/nick-bellows/learning-center-reference/api/internal/store"
@@ -26,7 +30,8 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	var deps httpapi.Deps
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+	deps := httpapi.Deps{Logger: logger}
 	if url := os.Getenv("DATABASE_URL"); url != "" {
 		st, err := store.New(ctx, url)
 		if err != nil {
@@ -53,10 +58,18 @@ func main() {
 		}
 
 		deps.Eligibility = st
+		deps.Identity = st
+		deps.Learning = st
 		deps.DB = st
 	} else {
-		log.Println("DATABASE_URL not set; /v1/members/{id}/eligibility will be unavailable")
+		log.Println("DATABASE_URL not set; database-backed routes will be unavailable")
 	}
+
+	verifier, err := configureAuth(ctx)
+	if err != nil {
+		log.Fatalf("authentication: %v", err)
+	}
+	deps.Auth = verifier
 
 	srv := &http.Server{
 		Addr:              ":" + envOr("PORT", "8080"),
@@ -84,6 +97,24 @@ func main() {
 		if err := srv.Shutdown(shutdownCtx); err != nil && !errors.Is(err, context.DeadlineExceeded) {
 			log.Printf("shutdown: %v", err)
 		}
+	}
+}
+
+func configureAuth(ctx context.Context) (authn.Verifier, error) {
+	switch strings.ToLower(envOr("AUTH_MODE", "disabled")) {
+	case "disabled":
+		log.Println("AUTH_MODE=disabled; protected routes fail closed with 503")
+		return authn.UnavailableVerifier{}, nil
+	case "demo":
+		log.Println("AUTH_MODE=demo; using synthetic local identities only")
+		return authn.DemoVerifier{
+			envOr("DEMO_LEARNER_TOKEN", "local-learner-token"): "demo|learner",
+			envOr("DEMO_ADMIN_TOKEN", "local-admin-token"):     "demo|admin",
+		}, nil
+	case "oidc":
+		return authn.NewOIDCVerifier(ctx, os.Getenv("OIDC_ISSUER_URL"), os.Getenv("OIDC_AUDIENCE"))
+	default:
+		return nil, fmt.Errorf("unsupported AUTH_MODE %q", os.Getenv("AUTH_MODE"))
 	}
 }
 

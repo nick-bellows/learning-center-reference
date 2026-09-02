@@ -14,7 +14,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me-locally}
       POSTGRES_DB: ${POSTGRES_DB:-lcr}
     ports:
-      - "127.0.0.1:5432:5432"
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
     volumes:
       - db-data:/var/lib/postgresql/data
     healthcheck:
@@ -32,10 +32,15 @@ services:
       DATABASE_URL: ${DATABASE_URL:-postgres://lcr:change-me-locally@db:5432/lcr?sslmode=disable}
       MIGRATE_ON_START: "1"          # apply embedded migrations at startup
       SEED_FILE: /seed.sql           # local demo data (synthetic, idempotent)
+      # Explicit local-only auth adapter. Production uses AUTH_MODE=oidc and
+      # validates issuer/audience/signature/expiry before resolving DB roles.
+      AUTH_MODE: demo
+      DEMO_LEARNER_TOKEN: local-learner-token
+      DEMO_ADMIN_TOKEN: local-admin-token
     volumes:
       - ./db/seed/seed.sql:/seed.sql:ro
     ports:
-      - "127.0.0.1:8080:8080"
+      - "127.0.0.1:${API_PORT:-8080}:8080"
 
   web:
     build: ./web
@@ -45,8 +50,11 @@ services:
       # Server Components fetch the API server-side, inside the compose
       # network — so the base URL is the api service, not localhost.
       API_BASE_URL: http://api:8080
+      # Used only by Next Server Components/Actions; never shipped to the browser.
+      DEMO_LEARNER_TOKEN: local-learner-token
+      DEMO_ADMIN_TOKEN: local-admin-token
     ports:
-      - "127.0.0.1:3000:3000"
+      - "127.0.0.1:${WEB_PORT:-3000}:3000"
 
 volumes:
   db-data:
