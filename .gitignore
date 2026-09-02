@@ -16,6 +16,8 @@ out/
 dist/
 build/
 coverage/
+web/test-results/
+web/playwright-report/
 *.tsbuildinfo
 .pnpm-store/
 

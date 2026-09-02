@@ -1,0 +1,11 @@
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Dependency checksum files contain public hashes, not credentials"
+paths = [
+  '''(^|[\\/])go\.sum$''',
+  '''(^|[\\/])node_modules([\\/]|$)''',
+  '''(^|[\\/])\.next([\\/]|$)''',
+  '''(^|[\\/])test-results([\\/]|$)'''
+]

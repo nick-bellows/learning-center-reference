@@ -82,6 +82,31 @@ jobs:
           set -e
           test "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8080/v1/members/not-a-uuid/eligibility)" = "400"
           test "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8080/v1/members/99999999-9999-9999-9999-999999999999/eligibility)" = "404"
+      - name: authenticated learner workflow is role-protected, ordered, and retry-safe
+        run: |
+          set -euo pipefail
+          API=http://localhost:8080
+          LEARNER='Authorization: Bearer local-learner-token'
+          ADMIN='Authorization: Bearer local-admin-token'
+
+          test "$(curl -s -o /dev/null -w '%{http_code}' "$API/v1/courses")" = "401"
+          test "$(curl -s -o /dev/null -w '%{http_code}' -H "$LEARNER" "$API/v1/admin/compliance")" = "403"
+
+          COURSE_ID=$(curl -sf -H "$LEARNER" "$API/v1/courses" | jq -er '.courses[0].id')
+          FIRST=$(curl -sf -X POST -H "$LEARNER" "$API/v1/courses/$COURSE_ID/enrollments")
+          echo "$FIRST" | jq -e '.created == true and .enrollment.total_lessons == 3'
+          ENROLLMENT_ID=$(echo "$FIRST" | jq -er '.enrollment.enrollment_id')
+          LESSON_ONE=$(echo "$FIRST" | jq -er '.enrollment.lessons[0].id')
+          LESSON_THREE=$(echo "$FIRST" | jq -er '.enrollment.lessons[2].id')
+
+          RETRY=$(curl -sf -X POST -H "$LEARNER" "$API/v1/courses/$COURSE_ID/enrollments")
+          echo "$RETRY" | jq -e '.created == false'
+          test "$(curl -s -o /dev/null -w '%{http_code}' -X POST -H "$LEARNER" "$API/v1/enrollments/$ENROLLMENT_ID/lessons/$LESSON_THREE/complete")" = "409"
+
+          COMPLETED=$(curl -sf -X POST -H "$LEARNER" "$API/v1/enrollments/$ENROLLMENT_ID/lessons/$LESSON_ONE/complete")
+          echo "$COMPLETED" | jq -e '.recorded == true and .enrollment.percent_complete == 33'
+          curl -sf -H "$LEARNER" "$API/v1/me/dashboard" | jq -e '.enrollments[0].completed_lessons == 1'
+          curl -sf -H "$ADMIN" "$API/v1/admin/compliance" | jq -e '.members | length == 4'
       - name: web renders the live statuses
         run: |
           for i in $(seq 1 30); do
@@ -92,6 +117,23 @@ jobs:
           grep -q 'Riley Referee' page.html
           grep -q 'ineligible_lapsed' page.html
           grep -q 'suspended' page.html
+          curl -sf http://localhost:3000/learn | grep -q 'Grassroots Match-Day Safety'
+          curl -sf http://localhost:3000/admin/compliance | grep -q 'Casey Admin'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: install accessibility-test dependencies and Chromium
+        working-directory: web
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+      - name: WCAG A/AA automated checks on all four routes
+        working-directory: web
+        env:
+          PLAYWRIGHT_BASE_URL: http://127.0.0.1:3000
+        run: npm run test:a11y
       - name: stack logs on failure
         if: failure()
         run: docker compose logs --tail 100
