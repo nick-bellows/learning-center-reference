@@ -1,7 +1,11 @@
-# Deploy runbook
+# Deployment Option: Fly.io and Vercel (Not Executed)
 
-Live demo target: **web on Vercel**, **API + Postgres on Fly.io**. Both run on Nick's own
-accounts; the login steps are interactive, so run the `!`-prefixed commands yourself.
+> This historical runbook is a design option only. It has not been executed or validated
+> against a live account, and the repository makes no deployment claim. Re-check current
+> provider commands, pricing, and security controls before use.
+
+Possible demo target: **web on Vercel**, **API + Postgres on Fly.io**. Both would run on
+Nick's own accounts; account creation, costs, and credentials require explicit approval.
 
 ## Prerequisites (one time)
 - A Fly.io account and `flyctl` installed (`winget install Fly.Flyctl`, or see fly.io/docs).
@@ -35,6 +39,8 @@ From the `api/` directory:
    ! fly deploy
    ! curl https://<your-app>.fly.dev/health
    ```
+6. Configure `AUTH_MODE=oidc`, `OIDC_ISSUER_URL`, and `OIDC_AUDIENCE`. Never expose
+   `AUTH_MODE=demo` to the public internet.
 
 ## Web on Vercel
 1. Import the GitHub repo in Vercel and set **Root Directory = `web`**.
@@ -46,6 +52,5 @@ From the `api/` directory:
 ## Notes
 - The API image is a distroless static binary (see `api/Dockerfile`) — verified to build
   locally with `docker build ./api`.
-- AWS alternative (App Runner + RDS) for the exact-JD-stack talking point is captured
-  separately in `docs/deploy-aws.md` (planned).
+- A cost-gated AWS container/RDS design is captured in `docs/deploy-aws.md`.
 - Keep all seeded data synthetic; never deploy real member data.

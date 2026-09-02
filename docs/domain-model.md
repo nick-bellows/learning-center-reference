@@ -1,6 +1,6 @@
 # Domain Model
 
-> Status: **draft v1 — populated from Nick's domain knowledge + sourced public research.** Modeled on publicly documented U.S. Soccer practice, generalized. No employer-internal process or data appears here. Real-world requirements change and vary by member association — this is a portfolio model, not an authoritative compliance reference.
+> Status: **reference model with a bounded implemented slice.** Learning progress, roles, generic role credentials, safeguarding inputs, and overall eligibility are implemented. Coaching pathways, referee grades, assessment attempts, certificate issuance, and age-cohort rules remain design notes. Modeled from public sources and Nick's general domain knowledge; no employer-internal process or data appears here. Real-world requirements change and vary by organization, so this is not an authoritative compliance reference.
 >
 > **Confidence tags:** `[sourced]` = from a cited public page; `[domain]` = from Nick's experience; `[assumption]` = a modeling default to confirm.
 
@@ -11,8 +11,9 @@
 **Shape:** `Course` → ordered `Module`s → ordered `Lesson`s; a `Lesson` may have an `Assessment`.
 
 - Lesson types: video, reading, quiz.
-- `Assessment` has a passing threshold and attempt history.
-- Completing required lessons + passing required assessments completes the `Course` → issues a `Certificate`.
+- `Assessment` currently stores a passing threshold and attempt limit; attempt history is planned.
+- The implemented demo completes a course after all ordered lessons. Requiring a passing
+  assessment and issuing a credential/certificate are the next domain increment, not current behavior.
 
 **Rules resolved:**
 - **1a. Ordering `[domain]`:** *It depends on the course, but typically in order.* → model an `ordering` flag on a course: `sequential` (must complete lessons in order — the default) vs `open` (any order). This one flag captures both cases cleanly.
@@ -78,19 +79,23 @@ This is the differentiator. Whether a member may **participate** is **not stored
 >
 > If **any** input lapses, or a hold is active, status flips to **ineligible automatically** — no separate action sets it. It's a computed value over the inputs' dates and holds.
 
-**Status values `[assumption]` (confirm):**
+**Implemented status values:**
 - `eligible` — all inputs current, no hold.
-- `provisional` — a required item is *in progress / submitted but not yet approved* (e.g., SafeSport started, background check pending). *(Optional — include only if useful.)*
 - `ineligible_lapsed` — a required credential has expired.
 - `suspended` — an active disciplinary hold.
 
-**Grace period `[assumption]`:** default **none** — status flips exactly on the expiry date. Modeled as a configurable `grace_days` (default 0) so it can be tuned without code changes. *(Confirm whether a real grace window should apply.)*
+`provisional` is deliberately not implemented because the current schema does not contain
+enough workflow state to distinguish pending review from missing evidence.
+
+**Grace period:** default **none**. The pure Go rule accepts an explicit `grace_days` input and
+tests the boundary, but the store currently supplies zero because no organization policy is modeled.
 
 **Player exclusion `[domain]`:** players who are minors (18U/19U, etc.) are **not** subject to the adult SafeSport/background-check requirements. Eligibility rules above apply to **adult roles**. Minor-player rules are out of scope beyond noting the exclusion.
 
 **Age & cohort determination `[domain]` (Nick):** whether someone is a *minor* — and, for players, which *age group* they fall in — is derived from **`date_of_birth` + the organization's cutoff rule**, never from a stored `age`. Cohorts are defined either by **birth year** or by **school year with an org-specific cutoff date** (e.g. Aug 1, June 30 — it varies by association/competition). A plain age can't express this distinction. It also sharpens the SafeSport rule ("players turning 18 *during the seasonal year*"): the minor/adult line keys off the **seasonal year + cutoff**, not today's date. Model the cutoff as a rule on the association/competition and derive minor status + age group from it. *(Schema already stores `date_of_birth`; the cutoff rule is added when age-group logic is needed.)*
 
-**Admin lapse windows `[assumption]`:** the admin dashboard surfaces who lapses in **30 / 60 / 90 days** across all inputs.
+**Administrator expiration view:** the implemented dashboard exposes each member's earliest
+credential expiration. Separate 30/60/90-day groupings and notification jobs are planned.
 
 ---
 
@@ -100,20 +105,24 @@ This is the differentiator. Whether a member may **participate** is **not stored
 - **Instructor** — teaches/grades courses.
 - **Admin** — sees compliance across members; manages holds/records.
 - **Member association** `[sourced]` — courses are searched/registered **by association, level, or location** ([US Soccer LC launch](https://www.ussoccer.com/stories/2019/06/us-soccer-learning-center-launch-marks-new-era-of-member-service)); model it as a light first-class entity that scopes courses and members.
-- **Multi-role `[assumption]`:** one person can be both a coach and a referee; their eligibility is evaluated **per role** (a coach-eligible person may be referee-ineligible if their recert lapsed).
+- **Multi-role:** one person can hold several roles. The implemented overall participation
+  decision uses the weakest required role credential; a per-role decision endpoint is future work.
 
 ---
 
-## 6. What becomes code first (M1 schema order)
+## 6. Implemented boundary
 
-1. **Learning + Safeguarding** contexts (course/module/lesson/assessment; member; safeguarding inputs + the eligibility function) — because the eligibility engine is the moat and the vertical slice needs courses.
-2. Then **Coaching** (licenses + prerequisite DAG + CEU renewal) and **Refereeing** (grades + recert) in M3.
+1. **Implemented:** member/role resolution, course/module/lesson/assessment metadata,
+   enrollment, ordered completion events, progress projection, generic role credentials,
+   safeguarding records, and derived overall eligibility.
+2. **Not implemented:** assessment attempts/passing, certificate or credential issuance from
+   course completion, coaching prerequisite DAG/CEUs, referee grades, and cohort logic.
 
 ---
 
-## 7. Open items to confirm with Nick
+## 7. Decisions recorded for this slice
 
-- [ ] Include the `provisional` status, or just eligible / lapsed / suspended?
-- [ ] Any real **grace period** after expiry, or immediate flip (current default)?
-- [ ] Model referee **grades** now, or start with a single generic referee credential and add grades later?
-- [ ] Is "disciplinary hold" worth modeling with a `source` (US Soccer / SafeSport / local org) field? *(Recommended — it's a great detail from your Q1.)*
+- [x] Use only eligible / lapsed / suspended until a real pending-review workflow exists.
+- [x] Use no implicit grace period; any future policy must supply it explicitly.
+- [x] Start with a generic referee credential; defer grades.
+- [x] Retain a constrained disciplinary-hold source field.

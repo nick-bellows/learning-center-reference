@@ -1,23 +1,63 @@
 # Learning Center Reference
 
-> **Status: a working vertical slice, not a full product.** What runs today is
-> the safeguarding-eligibility engine end to end — Postgres → Go API → Next.js
-> — for a soccer-federation Learning Center. Everything else (courses UI,
-> Auth0, Sanity, i18n, event sourcing) is **planned** and clearly labeled so
-> below. This repo is honest about that line on purpose.
+> **Status: working portfolio vertical slice.** A synthetic learner can authenticate,
+> resolve a database role, browse a course, enroll, complete ordered lessons, and see
+> persisted progress. A synthetic administrator can inspect eligibility derived live
+> from safeguarding and credential records. Hosted login, CMS content, certificates,
+> and cloud deployment remain explicitly out of scope.
 
-> ⚠️ **Independent portfolio project — not affiliated with, endorsed by, or
-> containing data from U.S. Soccer or any member organization. All names and
-> records are fictional.**
+> **Independent portfolio project — not affiliated with, endorsed by, or containing
+> data from U.S. Soccer or any member organization. Every name and record is fictional.**
 
-The interesting part is not CRUD: **eligibility to participate is a *derived*
-value.** It is never stored — it is recomputed on every request from a
-member's background-check expiry, SafeSport-training expiry, role credential
-(coaching license / referee recertification), and any active disciplinary
-hold, and it flips automatically the moment any input lapses. The rule lives
-in one pure, table-driven-tested Go function; the API and UI just deliver it.
+This reference implementation models one hard product problem rather than a broad mock:
+education progress and participation eligibility have to remain traceable as roles,
+credentials, expirations, and holds change.
 
-## Quick start (no .env needed)
+![Learner dashboard showing persisted course progress](docs/assets/learner-dashboard.png)
+
+## The implemented workflow
+
+```text
+verified identity → PostgreSQL role → published course → idempotent enrollment
+                  → ordered lesson completion events → dashboard projection
+
+admin identity → PostgreSQL admin role → current credential facts
+               → derived eligibility → compliance roster
+```
+
+- The API validates OIDC signature, issuer, audience, and expiry in `AUTH_MODE=oidc`.
+- Application roles come from PostgreSQL—not token claims or request parameters.
+- Local Docker uses an explicit demo verifier with two fixed synthetic identities; those
+  identifiers are not production credentials and never leave the server-rendered web app.
+- Enrollment and lesson-completion retries are idempotent.
+- Sequential courses reject an out-of-order completion with `409 Conflict`.
+- An append-only `progress_event` record and its `enrollment_progress` projection update
+  in one transaction. Event sourcing is deliberately confined to learner progress.
+- Participation eligibility is never stored. It is recalculated from background-check,
+  SafeSport, role-credential, and disciplinary-hold facts on each request.
+
+![Administrator compliance view with fictional members](docs/assets/admin-compliance.png)
+
+## Architecture
+
+```mermaid
+flowchart LR
+    Browser[Browser] --> Web[Next.js / TypeScript\nServer Components + Actions]
+    Web -->|Bearer token, server side| API[Go / chi API]
+    IdP[Auth0 or OIDC provider] -->|Discovery + signed JWT| API
+    API -->|Resolve subject and roles| PG[(PostgreSQL)]
+    API -->|Append completion| Events[(progress_event)]
+    Events -->|Same transaction| Projection[(enrollment_progress)]
+    API -->|Derived safeguarding status| Web
+```
+
+The local demo substitutes fixed synthetic subjects for the external identity provider so
+a clean clone needs no account or secret. Production-mode verification is implemented,
+but the hosted browser redirect/session flow is not claimed as complete.
+
+## Quick start
+
+Requirements: Docker with Compose.
 
 ```sh
 git clone https://github.com/nick-bellows/learning-center-reference
@@ -25,70 +65,105 @@ cd learning-center-reference
 docker compose up --build
 ```
 
-Then open **http://localhost:3000/members** — three synthetic members,
-computed live, one of each status:
+Open:
 
-![Members page: three live statuses](docs/assets/members-page.jpg)
+- `http://localhost:3000/learn` — learner enrollment and progress
+- `http://localhost:3000/admin/compliance` — role-protected compliance view
+- `http://localhost:3000/members` — three focused eligibility-rule examples
+- `http://localhost:8080/health` — readiness, including a PostgreSQL ping
 
-| Member | Status | Why |
-| --- | --- | --- |
-| Alex Coach | `eligible` | background check, SafeSport, and coaching license all current |
-| Sam Referee | `suspended` | an **active disciplinary hold** overrides current credentials |
-| Riley Referee | `ineligible_lapsed` | referee **recertification expired** — current checks don't save you |
+The API embeds and applies migrations, then loads an idempotent synthetic seed. Ports bind
+to `127.0.0.1`; Compose does not expose the demo outside the local machine.
 
-API directly: `curl localhost:8080/v1/members/33333333-3333-3333-3333-333333333333/eligibility`
-· `/health` pings the database (503 when it's down). The API applies its
-embedded migrations and the idempotent synthetic seed on startup.
+## What is implemented
 
-## Implemented vs planned
-
-| Piece | Status |
+| Capability | Evidence |
 | --- | --- |
-| Domain rule: derived eligibility (holds → credentials → grace), inclusive expiry dates, boundary-tested | **implemented** |
-| Go API: chi router, request-validated ids (400), 404 vs 500 separation, HTTP timeouts, graceful shutdown, DB-aware `/health` | **implemented** |
-| PostgreSQL: 4 versioned migrations, embedded startup migration runner, synthetic idempotent seed | **implemented** |
-| Next.js 16 web: server-component members page rendering live statuses | **implemented** |
-| Docker: distroless non-root API image, standalone non-root web image, one-command compose | **implemented** |
-| CI: Go vet/tests **with a real Postgres**, govulncheck, web lint/build, and an e2e job that runs the quickstart verbatim and asserts all three statuses | **implemented** |
-| Course delivery UI, enrollment flows (schema exists; no UI/endpoints) | planned |
-| Auth0 (OIDC) login and roles | planned |
-| Sanity CMS course content | planned |
-| Event-sourced learner progress | planned |
-| `es` locale, WCAG 2.1 AA test gate, OpenAPI spec | planned |
-| Cloud deployment | planned (`docs/deploy.md` documents the Fly.io path) |
+| Go REST API and contract | `api/internal/httpapi`, semantically validated `api/openapi.yaml` |
+| Authentication and RBAC | OIDC verifier plus explicit demo adapter in `api/internal/authn`; roles resolved by `internal/store` |
+| Course workflow | Published catalog, idempotent enrollment, sequential lesson completion, learner dashboard |
+| PostgreSQL state | Five versioned migrations, embedded transactional runner, idempotent synthetic seed |
+| Bounded event sourcing | Immutable completion events and transactional progress projection in migration `0005` |
+| Eligibility | Pure, boundary-tested Go rule derived from expiring facts and active holds |
+| Administrator workflow | Role-protected compliance roster with current reasons and earliest credential expiry |
+| Web and accessibility | Next.js 16, TypeScript, semantic UI, keyboard focus/reduced motion, automated axe WCAG A/AA gate |
+| Operations | JSON request logs without tokens/PII, DB-aware health check, timeouts, graceful shutdown |
+| Delivery | Non-root container images; GitHub Actions for vet/tests, real-Postgres integration, vulnerability checks, web build, Compose e2e, and accessibility |
 
-## The domain rule, in one paragraph
+## Verification
 
-A hold beats everything: any active disciplinary hold → `suspended`. Otherwise
-every required credential must be on file and current: SafeSport and a
-background check always; a role credential for members holding a
-credential-requiring role (coach, referee), where the **weakest link wins**
-across roles. Expiry dates are **inclusive** — a credential expiring
-`2027-06-01` is valid through that entire day (UTC) and flips at midnight
-after, with an optional grace window; the boundary is unit-tested, not
-assumed. See `api/internal/safeguarding/eligibility.go` and
-`docs/domain-model.md`.
+API unit and integration tests (the integration tests require the local database):
+
+```sh
+docker compose up -d db
+cd api
+go vet ./...
+DATABASE_URL="postgres://lcr:change-me-locally@localhost:5432/lcr?sslmode=disable" go test ./...
+```
+
+Web checks:
+
+```sh
+cd web
+npm ci
+npm run lint
+npm run build
+npx playwright install chromium
+PLAYWRIGHT_BASE_URL=http://localhost:3000 npm run test:a11y
+```
+
+CI also starts the complete Compose stack and exercises authentication failures, role
+boundaries, enrollment retry behavior, ordered progress, dashboard persistence, the admin
+view, and all four rendered routes. See `.github/workflows/ci.yml`.
+
+## Engineering decisions
+
+- [Go for the API](docs/decisions/0002-go-for-the-api.md)
+- [Confine event sourcing to learner progress](docs/decisions/0003-event-sourcing-scope.md)
+- [Hosting boundary and external services](docs/decisions/0004-hosting-vercel-fly-auth0-sanity.md)
+- [Domain model and assumptions](docs/domain-model.md)
+- [Interview guide](docs/INTERVIEW_GUIDE.md)
+
+## Security and privacy boundaries
+
+- The OIDC verifier fails closed; unsupported or missing auth configuration cannot expose
+  protected routes.
+- Ownership is checked before a learner can append progress to an enrollment.
+- Logs record request metadata, never bearer tokens or member details.
+- UUIDs are validated before database casts. SQL uses pgx parameters throughout.
+- The public eligibility example contains fixed synthetic records only. A real deployment
+  would protect member-level eligibility and apply organization-level authorization.
+- `.env` files are ignored. No real member data, provider secrets, or cloud credentials are
+  required or committed.
+
+## Deliberate limitations
+
+- No hosted demo or paid cloud resources have been created.
+- OIDC token verification is real; browser login/callback/session management still needs an
+  identity-provider tenant and is not simulated as finished.
+- `content_ref` is the headless-CMS integration seam; no Sanity project is provisioned.
+- Assessment attempts, passing scores, credentials issued from course completion,
+  certificates, i18n, uploads, notifications, and organization tenancy are not implemented.
+- Published course content is treated as immutable after learners enroll; schema evolution
+  for an in-progress course would require a versioning policy.
+- Automated axe checks catch only a subset of accessibility issues; manual keyboard,
+  screen-reader, zoom, and contrast review remains necessary before a WCAG conformance claim.
+- The compliance query favors readable code over large-roster optimization and would need
+  pagination and a set-based query at production scale.
 
 ## Repository map
 
 ```text
-docs/     Domain model (read first), ADRs, deploy notes
-api/      Go service: httpapi (router), safeguarding (the rule), store (pgx),
-          dbsetup (embedded migration runner), migrations/
-web/      Next.js 16 + TypeScript + Tailwind members page
-db/       Synthetic seed (labeled, idempotent)
+api/      Go service, OpenAPI contract, OIDC adapter, domain/store code, migrations
+web/      Next.js/TypeScript learner and administrator experiences, axe tests
+db/       Explicitly synthetic, idempotent local demonstration data
+docs/     Domain model, ADRs, screenshots, deployment notes, interview guide
 ```
 
-## Milestones
+## Next bounded milestone
 
-- [x] **M0 — Foundation:** repo scaffold, compose, CI green
-- [x] **M1 — Domain model:** `docs/domain-model.md` written before any schema
-- [x] **M2 — Safeguarding vertical slice:** db → API → web, e2e-tested in CI *(this is where the repo is now)*
-- [ ] **M3 — Courses & enrollment:** course player, progress, admin roster
-- [ ] **M4 — Release:** Auth0, certificates, `es`, WCAG gate, live demo
+Connect a real Auth0 development tenant to the existing OIDC verifier and Next.js session
+boundary, then add an integration test against a local standards-compliant OIDC fixture.
+That requires external credentials, so it is intentionally not represented as completed.
 
-## Disclaimer
-
-Educational reference implementation. Synthetic data only. Not affiliated
-with, endorsed by, or containing data from any soccer federation or member
-organization.
+No open-source license has been selected. Choose one before inviting third-party reuse.

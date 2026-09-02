@@ -1,24 +1,34 @@
 # 3. Confine event sourcing to the progress context
 
-- **Status:** accepted
+- **Status:** accepted and implemented
 - **Date:** 2026-08-07
+- **Implemented:** 2026-09-01
 
 ## Context
 
-The JD lists **CQRS / event sourcing** as a preferred skill. Event sourcing (storing an
-append-only log of events and projecting read models from them) is powerful but easy to
-over-apply — spreading it across a whole system adds large complexity for little benefit.
+Event sourcing—storing an append-only log of events and projecting read models from it—is
+powerful but easy to over-apply. Spreading it across a small system would add operational
+complexity without a corresponding product need.
 
 ## Decision
 
-Use event sourcing in **exactly one bounded context: learner progress.** Progress events
-(lesson started/completed, assessment attempted/passed) are appended to a `progress_events`
-table; a projection builds a `progress_read` model the UI queries. Every other context
-(courses, licenses, referee grades, safeguarding records) uses ordinary CRUD tables.
+Use event sourcing in **exactly one bounded context: learner progress.** The implemented
+slice appends `lesson_completed` facts to `progress_event`; a transactional
+`enrollment_progress` projection serves the dashboard. The event uniqueness constraint
+makes client retries idempotent, and locking the enrollment serializes concurrent
+completion requests. Every other context—courses, roles, credentials, and safeguarding
+records—uses ordinary relational tables.
+
+The event insert, projection refresh, and enrollment-status update happen in one database
+transaction. This avoids introducing an event broker and eventual consistency where the
+current scale and workflow do not require either.
 
 ## Consequences
 
-- We can speak to CQRS/event sourcing truthfully, with a real, well-chosen example, and
-  explain *why we did not use it elsewhere* — which demonstrates judgment, not just knowledge.
-- Progress gets a natural audit trail (useful for a compliance-adjacent product).
-- Slightly more code in that one context than plain CRUD would need; deliberately contained.
+- The repository contains a working, bounded event-sourcing example and a clear reason it
+  was not spread across the application.
+- Progress gets a natural audit trail while dashboard reads remain simple.
+- Course content is currently treated as immutable after enrollment. Supporting edits to
+  active courses requires explicit versioning rather than silently changing totals.
+- This is not a globally asynchronous architecture. A broker/outbox becomes justified only
+  when an independent downstream system genuinely needs progress events.
