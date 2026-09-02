@@ -1,9 +1,13 @@
 # 4. Host on Vercel + Fly.io + Auth0 + Sanity (max stack fidelity)
 
-- **Status:** accepted
+- **Status:** superseded by [ADR 0005](0005-one-bounded-recruiter-deployment.md)
 - **Date:** 2026-08-07
 
 ## Context
+
+> This records the original 2026-08-07 decision. It was not executed. Provider
+> pricing and the portfolio priority changed before any account or deployment was
+> created, so ADR 0005 replaces it without rewriting the historical rationale.
 
 The project needs a live, always-on, low-cost demo. Two goals were in tension:
 minimizing the number of services, versus matching U.S. Soccer's exact stack (a portfolio

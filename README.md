@@ -120,7 +120,8 @@ view, and all four rendered routes. See `.github/workflows/ci.yml`.
 
 - [Go for the API](docs/decisions/0002-go-for-the-api.md)
 - [Confine event sourcing to learner progress](docs/decisions/0003-event-sourcing-scope.md)
-- [Hosting boundary and external services](docs/decisions/0004-hosting-vercel-fly-auth0-sanity.md)
+- [Historical hosting option](docs/decisions/0004-hosting-vercel-fly-auth0-sanity.md)
+- [One bounded recruiter deployment](docs/decisions/0005-one-bounded-recruiter-deployment.md)
 - [Domain model and assumptions](docs/domain-model.md)
 - [Interview guide](docs/INTERVIEW_GUIDE.md)
 
