@@ -2,8 +2,8 @@
 // ships this code (or the API URL) to the browser. In Next 16 a component is a Server
 // Component by default; making it `async` lets us `await` data right here.
 //
-// NOTE: for now we look up the two seeded demo members by id. A real GET /v1/members list
-// endpoint arrives in Part C; this page will switch to it then.
+// This rules-focused page intentionally names the three fixed synthetic examples.
+// The authenticated administrator roster comes from /v1/admin/compliance instead.
 
 const API_BASE = process.env.API_BASE_URL ?? "http://localhost:8080";
 
@@ -58,13 +58,15 @@ export default async function MembersPage() {
   );
 
   return (
-    <main className="mx-auto max-w-3xl p-8">
-      <h1 className="text-2xl font-semibold">Member participation status</h1>
-      <p className="mt-1 text-sm text-gray-500">
+    <main className="page-shell">
+      <p className="eyebrow">Eligibility rules</p>
+      <h1>Member participation status</h1>
+      <p className="lede max-w-2xl">
         Eligibility is computed live from each member&rsquo;s safeguarding records.
       </p>
 
-      <table className="mt-6 w-full border-collapse text-left text-sm">
+      <div className="card mt-8 overflow-x-auto">
+      <table>
         <thead>
           <tr className="border-b border-gray-200">
             <th className="py-2 pr-4 font-medium">Member</th>
@@ -84,6 +86,7 @@ export default async function MembersPage() {
           ))}
         </tbody>
       </table>
+      </div>
     </main>
   );
 }
