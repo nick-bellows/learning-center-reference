@@ -84,6 +84,22 @@ jobs:
           set -e
           test "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8080/v1/members/not-a-uuid/eligibility)" = "400"
           test "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8080/v1/members/99999999-9999-9999-9999-999999999999/eligibility)" = "404"
+      - name: credentials contract is served only to a scoped service token
+        run: |
+          set -euo pipefail
+          API=http://localhost:8080
+          SERVICE='Authorization: Bearer local-service-token'
+          LEARNER='Authorization: Bearer local-learner-token'
+
+          test "$(curl -s -o /dev/null -w '%{http_code}' "$API/v1/members/demo%7Clearner/credentials")" = "401"
+          test "$(curl -s -o /dev/null -w '%{http_code}' -H "$LEARNER" "$API/v1/members/demo%7Clearner/credentials")" = "403"
+          curl -sf -H "$SERVICE" "$API/v1/members/demo%7Clearner/credentials" \
+            | jq -e '.contract == "learning-center.credentials.v1" and .member.subject == "demo|learner" and .eligibility.status == "eligible" and .role_credentials[0].valid == true'
+          curl -sf -H "$SERVICE" "$API/v1/members/demo%7Creferee-sam/credentials" \
+            | jq -e '.eligibility.status == "suspended" and .holds[0].source == "safesport" and (.holds[0] | has("reason") | not)'
+          curl -sf -H "$SERVICE" "$API/v1/members/demo%7Creferee-riley/credentials" \
+            | jq -e '.eligibility.status == "ineligible_lapsed" and .role_credentials[0].valid == false'
+          test "$(curl -s -o /dev/null -w '%{http_code}' -H "$SERVICE" "$API/v1/members/demo%7Cnobody/credentials")" = "404"
       - name: authenticated learner workflow is role-protected, ordered, and retry-safe
         run: |
           set -euo pipefail

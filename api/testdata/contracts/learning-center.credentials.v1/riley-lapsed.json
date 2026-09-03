@@ -1,0 +1,27 @@
+{
+  "contract": "learning-center.credentials.v1",
+  "member": {
+    "id": "33333333-3333-3333-3333-333333333333",
+    "subject": "mock|riley",
+    "roles": ["referee"]
+  },
+  "as_of": "2026-09-03T05:00:00Z",
+  "eligibility": {
+    "status": "ineligible_lapsed",
+    "reason": "referee credential expired on 2025-01-15"
+  },
+  "holds": [],
+  "safeguarding": {
+    "safesport_training": { "expires_at": "2027-06-01", "valid": true },
+    "background_check": { "expires_at": "2028-01-01", "valid": true }
+  },
+  "role_credentials": [
+    {
+      "role": "referee",
+      "credential_type": "referee_recert",
+      "issued_at": "2024-01-15",
+      "expires_at": "2025-01-15",
+      "valid": false
+    }
+  ]
+}

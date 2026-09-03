@@ -15,10 +15,10 @@ insert into member_association (id, name, slug) values
 on conflict do nothing;
 
 insert into member (id, auth_subject, display_name, date_of_birth, association_id) values
-  ('11111111-1111-1111-1111-111111111111', 'demo|learner', 'Alex Coach (synthetic)',    '1990-05-01', '00000000-0000-0000-0000-0000000000aa'),
-  ('22222222-2222-2222-2222-222222222222', null,           'Sam Referee (synthetic)',   '1988-09-15', '00000000-0000-0000-0000-0000000000aa'),
-  ('33333333-3333-3333-3333-333333333333', null,           'Riley Referee (synthetic)', '1995-03-20', '00000000-0000-0000-0000-0000000000aa'),
-  ('44444444-4444-4444-4444-444444444444', 'demo|admin',   'Casey Admin (synthetic)',   '1986-11-04', '00000000-0000-0000-0000-0000000000aa')
+  ('11111111-1111-1111-1111-111111111111', 'demo|learner',       'Alex Coach (synthetic)',    '1990-05-01', '00000000-0000-0000-0000-0000000000aa'),
+  ('22222222-2222-2222-2222-222222222222', 'demo|referee-sam',   'Sam Referee (synthetic)',   '1988-09-15', '00000000-0000-0000-0000-0000000000aa'),
+  ('33333333-3333-3333-3333-333333333333', 'demo|referee-riley', 'Riley Referee (synthetic)', '1995-03-20', '00000000-0000-0000-0000-0000000000aa'),
+  ('44444444-4444-4444-4444-444444444444', 'demo|admin',         'Casey Admin (synthetic)',   '1986-11-04', '00000000-0000-0000-0000-0000000000aa')
 on conflict (id) do update set auth_subject = excluded.auth_subject;
 
 insert into member_role (member_id, role) values

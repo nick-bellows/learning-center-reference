@@ -16,7 +16,7 @@ type Status string
 
 const (
 	StatusEligible   Status = "eligible"
-	StatusSuspended  Status = "suspended"        // an active disciplinary hold
+	StatusSuspended  Status = "suspended"         // an active disciplinary hold
 	StatusIneligible Status = "ineligible_lapsed" // a required credential missing or expired
 	// StatusProvisional is planned: added once "pending / in-progress" states are wired from
 	// the database (e.g. background_check.status = 'pending').
@@ -44,6 +44,23 @@ type Decision struct {
 	Reason string
 }
 
+// Current reports whether a credential expiring on expires is still valid at now.
+//
+// Expiry dates are INCLUSIVE: a credential whose expires_at is 2027-06-01 is valid
+// through that entire day (UTC) and flips to expired at 2027-06-02T00:00:00Z.
+// Database DATE columns arrive as midnight timestamps, so validity runs until
+// expiry + 1 day (+ any grace window). Nothing on file (nil) is never current.
+//
+// Evaluate and the credentials contract both call this, so a per-credential valid
+// flag can never disagree with the overall eligibility decision.
+func Current(now time.Time, expires *time.Time, graceDays int) bool {
+	if expires == nil {
+		return false
+	}
+	deadline := expires.AddDate(0, 0, 1).Add(time.Duration(graceDays) * 24 * time.Hour)
+	return now.Before(deadline)
+}
+
 // Evaluate applies the safeguarding rule. Order matters: a hold overrides everything else.
 func Evaluate(in Inputs) Decision {
 	// 1. An active disciplinary hold makes the member ineligible regardless of anything else.
@@ -68,17 +85,11 @@ func Evaluate(in Inputs) Decision {
 		required = append(required, cred{"role credential", in.RoleCredentialExpires})
 	}
 
-	// Expiry dates are INCLUSIVE: a credential whose expires_at is 2027-06-01
-	// is valid through that entire day (UTC) and flips to expired at
-	// 2027-06-02T00:00:00Z. Database DATE columns arrive as midnight
-	// timestamps, so validity runs until expiry + 1 day (+ any grace window).
-	grace := time.Duration(in.GraceDays) * 24 * time.Hour
 	for _, c := range required {
 		if c.expires == nil {
 			return Decision{StatusIneligible, "missing " + c.name}
 		}
-		deadline := c.expires.AddDate(0, 0, 1).Add(grace)
-		if !in.Now.Before(deadline) {
+		if !Current(in.Now, c.expires, in.GraceDays) {
 			return Decision{StatusIneligible, "expired " + c.name}
 		}
 	}

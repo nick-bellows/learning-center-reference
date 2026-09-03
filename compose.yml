@@ -37,6 +37,8 @@ services:
       AUTH_MODE: demo
       DEMO_LEARNER_TOKEN: local-learner-token
       DEMO_ADMIN_TOKEN: local-admin-token
+      # Service-to-service token for the credentials contract; synthetic, local-only.
+      DEMO_SERVICE_TOKEN: local-service-token
     volumes:
       - ./db/seed/seed.sql:/seed.sql:ro
     ports:

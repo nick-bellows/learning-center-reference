@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/nick-bellows/learning-center-reference/api/internal/credentials"
 	"github.com/nick-bellows/learning-center-reference/api/internal/learning"
 	"github.com/nick-bellows/learning-center-reference/api/internal/safeguarding"
 )
@@ -525,4 +526,47 @@ func (s *Store) maxDate(ctx context.Context, query, memberID string) (*time.Time
 	}
 	t := nt.Time
 	return &t, nil
+}
+
+// LoadMemberCredentials assembles the provider side of the learning-center.credentials.v1
+// contract for one identity-provider subject. The eligibility inputs come from
+// LoadSafeguardingInputs so this route and the public eligibility route read the same
+// facts; the individual role_credential rows are added because the contract lists each.
+func (s *Store) LoadMemberCredentials(ctx context.Context, subject string) (credentials.Record, error) {
+	member, err := s.ResolveMemberBySubject(ctx, subject)
+	if err != nil {
+		return credentials.Record{}, err
+	}
+	inputs, err := s.LoadSafeguardingInputs(ctx, member.ID)
+	if err != nil {
+		return credentials.Record{}, err
+	}
+	record := credentials.Record{
+		MemberID:        member.ID,
+		Subject:         subject,
+		Roles:           member.Roles,
+		Inputs:          inputs,
+		RoleCredentials: make([]credentials.RoleCredential, 0),
+	}
+
+	rows, err := s.pool.Query(ctx, `
+		select role, credential_type, issued_at, expires_at
+		from role_credential
+		where member_id = $1::uuid
+		order by role, expires_at desc, issued_at desc`, member.ID)
+	if err != nil {
+		return credentials.Record{}, fmt.Errorf("role credentials: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var credential credentials.RoleCredential
+		if err := rows.Scan(&credential.Role, &credential.CredentialType, &credential.IssuedAt, &credential.ExpiresAt); err != nil {
+			return credentials.Record{}, fmt.Errorf("scanning role credential: %w", err)
+		}
+		record.RoleCredentials = append(record.RoleCredentials, credential)
+	}
+	if err := rows.Err(); err != nil {
+		return credentials.Record{}, fmt.Errorf("iterating role credentials: %w", err)
+	}
+	return record, nil
 }

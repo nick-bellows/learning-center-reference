@@ -1,0 +1,27 @@
+{
+  "contract": "learning-center.credentials.v1",
+  "member": {
+    "id": "11111111-1111-1111-1111-111111111111",
+    "subject": "mock|alex",
+    "roles": ["learner", "coach"]
+  },
+  "as_of": "2026-09-03T05:00:00Z",
+  "eligibility": {
+    "status": "eligible",
+    "reason": ""
+  },
+  "holds": [],
+  "safeguarding": {
+    "safesport_training": { "expires_at": "2027-06-01", "valid": true },
+    "background_check": { "expires_at": "2028-01-01", "valid": true }
+  },
+  "role_credentials": [
+    {
+      "role": "coach",
+      "credential_type": "grassroots_license",
+      "issued_at": "2025-02-01",
+      "expires_at": "2027-02-01",
+      "valid": true
+    }
+  ]
+}

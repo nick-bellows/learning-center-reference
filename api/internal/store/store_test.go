@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/nick-bellows/learning-center-reference/api/internal/credentials"
 	"github.com/nick-bellows/learning-center-reference/api/internal/dbsetup"
 	"github.com/nick-bellows/learning-center-reference/api/internal/safeguarding"
 	"github.com/nick-bellows/learning-center-reference/api/migrations"
@@ -170,5 +171,70 @@ func TestLearningWorkflow_Integration(t *testing.T) {
 		if !lesson.Completed || lesson.CompletedAt == nil {
 			t.Errorf("lesson not projected complete: %#v", lesson)
 		}
+	}
+}
+
+// TestLoadMemberCredentials_Integration reads the seeded members by subject, the way the
+// federation service does, and checks the contract facts the fixtures pin.
+func TestLoadMemberCredentials_Integration(t *testing.T) {
+	url := os.Getenv("DATABASE_URL")
+	if url == "" {
+		t.Skip("set DATABASE_URL to run (needs Postgres)")
+	}
+
+	ctx := context.Background()
+	st, err := New(ctx, url)
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	t.Cleanup(st.Close)
+	if _, err := dbsetup.Migrate(ctx, st.Pool(), migrations.Files); err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
+	seed, err := os.ReadFile("../../../db/seed/seed.sql")
+	if err != nil {
+		t.Fatalf("read seed: %v", err)
+	}
+	if err := dbsetup.ApplySeed(ctx, st.Pool(), string(seed)); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	cases := []struct {
+		name, subject, id   string
+		want                safeguarding.Status
+		holds               int
+		roleCredentialValid bool
+	}{
+		{"eligible coach", "demo|learner", "11111111-1111-1111-1111-111111111111", safeguarding.StatusEligible, 0, true},
+		{"suspended referee (active hold)", "demo|referee-sam", "22222222-2222-2222-2222-222222222222", safeguarding.StatusSuspended, 1, true},
+		{"lapsed referee (expired recert)", "demo|referee-riley", "33333333-3333-3333-3333-333333333333", safeguarding.StatusIneligible, 0, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			record, err := st.LoadMemberCredentials(ctx, tc.subject)
+			if err != nil {
+				t.Fatalf("load: %v", err)
+			}
+			if record.MemberID != tc.id || record.Subject != tc.subject {
+				t.Errorf("record identity = %q / %q; want %q / %q", record.MemberID, record.Subject, tc.id, tc.subject)
+			}
+			response := credentials.Build(record)
+			if response.Eligibility.Status != tc.want {
+				t.Errorf("status = %q (%s); want %q", response.Eligibility.Status, response.Eligibility.Reason, tc.want)
+			}
+			if len(response.Holds) != tc.holds {
+				t.Errorf("holds = %#v; want %d", response.Holds, tc.holds)
+			}
+			if len(response.RoleCredentials) != 1 || response.RoleCredentials[0].Valid != tc.roleCredentialValid {
+				t.Errorf("role credentials = %#v; want one with valid=%v", response.RoleCredentials, tc.roleCredentialValid)
+			}
+			if !response.Safeguarding.SafeSportTraining.Valid || !response.Safeguarding.BackgroundCheck.Valid {
+				t.Errorf("safeguarding = %#v; want both valid", response.Safeguarding)
+			}
+		})
+	}
+
+	if _, err := st.LoadMemberCredentials(ctx, "demo|nobody"); !errors.Is(err, ErrNotFound) {
+		t.Errorf("unknown subject error = %v; want ErrNotFound", err)
 	}
 }
