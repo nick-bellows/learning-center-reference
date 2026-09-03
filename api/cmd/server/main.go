@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/nick-bellows/learning-center-reference/api/internal/authn"
+	"github.com/nick-bellows/learning-center-reference/api/internal/credentials"
 	"github.com/nick-bellows/learning-center-reference/api/internal/dbsetup"
 	"github.com/nick-bellows/learning-center-reference/api/internal/httpapi"
 	"github.com/nick-bellows/learning-center-reference/api/internal/store"
@@ -73,6 +74,7 @@ func main() {
 		deps.Eligibility = st
 		deps.Identity = st
 		deps.Learning = st
+		deps.Credentials = st
 		deps.DB = st
 	} else {
 		log.Println("DATABASE_URL not set; database-backed routes will be unavailable")
@@ -83,6 +85,7 @@ func main() {
 		log.Fatalf("authentication: %v", err)
 	}
 	deps.Auth = verifier
+	deps.ServiceAuth = verifier
 
 	srv := &http.Server{
 		Addr:              ":" + envOr("PORT", "8080"),
@@ -113,7 +116,14 @@ func main() {
 	}
 }
 
-func configureAuth(ctx context.Context, authMode string) (authn.Verifier, error) {
+// verifier is what every auth mode provides: subject verification for person routes and
+// claims verification for service routes, from one trust configuration.
+type verifier interface {
+	authn.Verifier
+	authn.ClaimsVerifier
+}
+
+func configureAuth(ctx context.Context, authMode string) (verifier, error) {
 	switch authMode {
 	case "disabled":
 		log.Println("AUTH_MODE=disabled; protected routes fail closed with 503")
@@ -121,8 +131,12 @@ func configureAuth(ctx context.Context, authMode string) (authn.Verifier, error)
 	case "demo":
 		log.Println("AUTH_MODE=demo; using synthetic local identities only")
 		return authn.DemoVerifier{
-			envOr("DEMO_LEARNER_TOKEN", "local-learner-token"): "demo|learner",
-			envOr("DEMO_ADMIN_TOKEN", "local-admin-token"):     "demo|admin",
+			envOr("DEMO_LEARNER_TOKEN", "local-learner-token"): {Subject: "demo|learner"},
+			envOr("DEMO_ADMIN_TOKEN", "local-admin-token"):     {Subject: "demo|admin"},
+			// The service identity is a client, not a member: it carries a scope and no roles.
+			envOr("DEMO_SERVICE_TOKEN", "local-service-token"): {
+				Subject: "demo|federation-api", Scopes: []string{credentials.Scope},
+			},
 		}, nil
 	case "oidc":
 		return authn.NewOIDCVerifier(ctx, os.Getenv("OIDC_ISSUER_URL"), os.Getenv("OIDC_AUDIENCE"))

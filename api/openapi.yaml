@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Learning Center Reference API
-  version: 0.3.0
+  version: 0.4.0
   description: >-
     Contract for an independent portfolio reference implementation using fictional
     soccer-federation data. It is not an official federation service.
@@ -45,6 +45,50 @@ paths:
           $ref: "#/components/responses/BadRequest"
         "404":
           $ref: "#/components/responses/NotFound"
+  /v1/members/{subject}/credentials:
+    get:
+      operationId: getMemberCredentials
+      tags: [Compliance]
+      summary: Serve a member's credential facts and derived eligibility to a trusted service
+      description: >-
+        Provider side of the learning-center.credentials.v1 contract. The caller is a
+        service, not a person: it presents an OAuth2 client-credentials token that must
+        carry the credentials:read scope, and no member row is resolved for it. The path
+        subject is the member's identity-provider subject, URL-encoded. Eligibility and
+        every valid flag are evaluated by this API at as_of; consumers must not re-derive
+        them from the dates. Hold reasons, display names, and dates of birth are never
+        included.
+      security:
+        - serviceBearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/Subject"
+      responses:
+        "200":
+          description: Credential facts and derived eligibility for the subject
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MemberCredentials"
+        "400":
+          description: Empty, malformed, or over-long subject
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Error"}
+        "401":
+          description: Missing or invalid service token
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Error"}
+        "403":
+          description: Valid token without the credentials:read scope
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Error"}
+        "404":
+          description: No member has that subject
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Error"}
   /v1/courses:
     get:
       operationId: listCourses
@@ -180,12 +224,27 @@ components:
       bearerFormat: JWT
       description: >-
         OIDC JWT in production mode; explicit synthetic token in local demo mode.
+    serviceBearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: >-
+        OAuth2 client-credentials access token from the shared provider, verified for
+        signature, issuer, audience, and expiry, then authorised on the credentials:read
+        scope (space-separated "scope" claim or "scp" array). In local demo mode the
+        synthetic DEMO_SERVICE_TOKEN maps to that scope.
   parameters:
     MemberId:
       name: memberId
       in: path
       required: true
       schema: {type: string, format: uuid}
+    Subject:
+      name: subject
+      in: path
+      required: true
+      description: URL-encoded identity-provider subject of the member, for example demo%7Clearner
+      schema: {type: string, minLength: 1, maxLength: 255}
     CourseId:
       name: courseId
       in: path
@@ -323,3 +382,66 @@ components:
         status: {type: string, enum: [eligible, suspended, ineligible_lapsed]}
         reason: {type: string}
         next_expiration: {type: string, format: date-time}
+    MemberCredentials:
+      type: object
+      description: >-
+        learning-center.credentials.v1 response. Adding a field is compatible; removing or
+        renaming one, or changing an enum, is a new contract version.
+      required: [contract, member, as_of, eligibility, holds, safeguarding, role_credentials]
+      properties:
+        contract: {type: string, enum: [learning-center.credentials.v1]}
+        member: {$ref: "#/components/schemas/CredentialsMember"}
+        as_of: {type: string, format: date-time}
+        eligibility: {$ref: "#/components/schemas/CredentialsEligibility"}
+        holds:
+          type: array
+          items: {$ref: "#/components/schemas/ActiveHold"}
+        safeguarding:
+          type: object
+          required: [safesport_training, background_check]
+          properties:
+            safesport_training: {$ref: "#/components/schemas/ExpiringFact"}
+            background_check: {$ref: "#/components/schemas/ExpiringFact"}
+        role_credentials:
+          type: array
+          items: {$ref: "#/components/schemas/RoleCredentialStatus"}
+    CredentialsMember:
+      type: object
+      required: [id, subject, roles]
+      properties:
+        id: {type: string, format: uuid}
+        subject: {type: string}
+        roles:
+          type: array
+          items: {type: string, enum: [learner, instructor, admin, coach, referee]}
+    CredentialsEligibility:
+      type: object
+      required: [status, reason]
+      properties:
+        status: {type: string, enum: [eligible, suspended, ineligible_lapsed]}
+        reason: {type: string, description: Free text for people; never parsed by consumers}
+    ActiveHold:
+      type: object
+      description: An active disciplinary hold; the reason text is deliberately not carried
+      required: [source, active]
+      properties:
+        source: {type: string, enum: [us_soccer, safesport, local_org]}
+        active: {type: boolean}
+    ExpiringFact:
+      type: object
+      required: [expires_at, valid]
+      properties:
+        expires_at:
+          type: [string, "null"]
+          format: date
+          description: Null when nothing is on file
+        valid: {type: boolean, description: Evaluated by this API at as_of with its inclusive-expiry rule}
+    RoleCredentialStatus:
+      type: object
+      required: [role, credential_type, issued_at, expires_at, valid]
+      properties:
+        role: {type: string, enum: [coach, referee]}
+        credential_type: {type: string}
+        issued_at: {type: string, format: date}
+        expires_at: {type: string, format: date}
+        valid: {type: boolean}

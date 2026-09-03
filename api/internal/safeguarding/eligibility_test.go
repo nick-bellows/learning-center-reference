@@ -93,3 +93,31 @@ func TestEvaluate(t *testing.T) {
 		})
 	}
 }
+
+// TestCurrent pins the shared expiry rule at its boundaries. The credentials contract
+// reports one valid flag per credential through this function, so a change here moves
+// both the public eligibility decision and the contract together.
+func TestCurrent(t *testing.T) {
+	expires := time.Date(2026, 8, 8, 0, 0, 0, 0, time.UTC)
+	cases := []struct {
+		name      string
+		now       time.Time
+		expires   *time.Time
+		graceDays int
+		want      bool
+	}{
+		{"nothing on file", time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC), nil, 0, false},
+		{"well before expiry", time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC), ptr(expires), 0, true},
+		{"last second of the expiry day", time.Date(2026, 8, 8, 23, 59, 59, 0, time.UTC), ptr(expires), 0, true},
+		{"midnight after the expiry day", time.Date(2026, 8, 9, 0, 0, 0, 0, time.UTC), ptr(expires), 0, false},
+		{"inside the grace window", time.Date(2026, 8, 12, 0, 0, 0, 0, time.UTC), ptr(expires), 5, true},
+		{"grace window exhausted", time.Date(2026, 8, 14, 0, 0, 0, 0, time.UTC), ptr(expires), 5, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := Current(tc.now, tc.expires, tc.graceDays); got != tc.want {
+				t.Errorf("Current() = %v; want %v", got, tc.want)
+			}
+		})
+	}
+}

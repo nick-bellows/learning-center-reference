@@ -99,6 +99,7 @@ path. The guided landing page links each UI behavior to its implementation and t
 | PostgreSQL state | Five versioned migrations, embedded transactional runner, idempotent synthetic seed |
 | Bounded event sourcing | Immutable completion events and transactional progress projection in migration `0005` |
 | Eligibility | Pure, boundary-tested Go rule derived from expiring facts and active holds |
+| Credentials contract v1 | Service-token `GET /v1/members/{subject}/credentials` implementing `learning-center.credentials.v1` (scope `credentials:read`); shape pinned by the consumer's fixtures under `api/testdata/contracts` |
 | Administrator workflow | Role-protected compliance roster with current reasons and earliest credential expiry |
 | Web and accessibility | Next.js 16, TypeScript, semantic UI, keyboard focus/reduced motion, automated axe WCAG A/AA gate |
 | Operations | JSON request logs without tokens/PII, DB-aware health check, timeouts, graceful shutdown, request/body limits, scoped demo reset |

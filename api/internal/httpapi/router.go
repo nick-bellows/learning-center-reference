@@ -7,6 +7,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"regexp"
 	"strings"
 	"time"
@@ -15,6 +16,7 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 
 	"github.com/nick-bellows/learning-center-reference/api/internal/authn"
+	"github.com/nick-bellows/learning-center-reference/api/internal/credentials"
 	"github.com/nick-bellows/learning-center-reference/api/internal/learning"
 	"github.com/nick-bellows/learning-center-reference/api/internal/safeguarding"
 	"github.com/nick-bellows/learning-center-reference/api/internal/store"
@@ -23,6 +25,11 @@ import (
 // EligibilityLoader is the narrow store view needed by the public reference endpoint.
 type EligibilityLoader interface {
 	LoadSafeguardingInputs(ctx context.Context, memberID string) (safeguarding.Inputs, error)
+}
+
+// CredentialsLoader is the store view behind the service-to-service credentials contract.
+type CredentialsLoader interface {
+	LoadMemberCredentials(ctx context.Context, subject string) (credentials.Record, error)
 }
 
 // IdentityResolver maps a verified external subject to local roles.
@@ -47,9 +54,11 @@ type Pinger interface {
 // Deps holds dependencies created by main and injected into the router.
 type Deps struct {
 	Eligibility        EligibilityLoader
+	Credentials        CredentialsLoader
 	Identity           IdentityResolver
 	Learning           LearningStore
 	Auth               authn.Verifier
+	ServiceAuth        authn.ClaimsVerifier
 	DB                 Pinger
 	Logger             *slog.Logger
 	RateLimitPerMinute int
@@ -65,6 +74,9 @@ var uuidRe = regexp.MustCompile(
 func NewRouter(deps Deps) http.Handler {
 	if deps.Auth == nil {
 		deps.Auth = authn.UnavailableVerifier{}
+	}
+	if deps.ServiceAuth == nil {
+		deps.ServiceAuth = authn.UnavailableVerifier{}
 	}
 	if deps.Logger == nil {
 		deps.Logger = slog.Default()
@@ -83,6 +95,10 @@ func NewRouter(deps Deps) http.Handler {
 
 	r.Get("/health", deps.handleHealth)
 	r.Get("/v1/members/{id}/eligibility", deps.handleEligibility)
+	// Service-to-service contract: the caller is a scoped client, not a person, so this
+	// route bypasses the member-resolving authenticate middleware below.
+	r.With(deps.authenticateService(credentials.Scope)).
+		Get("/v1/members/{subject}/credentials", deps.handleMemberCredentials)
 
 	r.Group(func(r chi.Router) {
 		r.Use(deps.authenticate)
@@ -160,6 +176,35 @@ func (deps Deps) authenticate(next http.Handler) http.Handler {
 	})
 }
 
+// authenticateService guards routes called by another system rather than a person. The
+// token must verify and carry scope; no member row is resolved because the caller is a
+// client. Error bodies follow the credentials contract's errors fixture.
+func (deps Deps) authenticateService(scope string) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			raw, ok := bearerToken(r.Header.Get("Authorization"))
+			if !ok {
+				writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+				return
+			}
+			claims, err := deps.ServiceAuth.VerifyClaims(r.Context(), raw)
+			if err != nil {
+				if errors.Is(err, authn.ErrUnavailable) {
+					writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "authentication not configured"})
+					return
+				}
+				writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+				return
+			}
+			if !claims.HasScope(scope) {
+				writeJSON(w, http.StatusForbidden, map[string]string{"error": "forbidden"})
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
 func bearerToken(header string) (string, bool) {
 	parts := strings.Fields(header)
 	if len(parts) != 2 || !strings.EqualFold(parts[0], "Bearer") || parts[1] == "" {
@@ -222,6 +267,34 @@ func (deps Deps) handleEligibility(w http.ResponseWriter, r *http.Request) {
 		"status":    decision.Status,
 		"reason":    decision.Reason,
 	})
+}
+
+// maxSubjectLength follows OpenID Connect Core 1.0 section 2: a subject never exceeds
+// 255 ASCII characters, so anything longer is a malformed request, not a lookup.
+const maxSubjectLength = 255
+
+func (deps Deps) handleMemberCredentials(w http.ResponseWriter, r *http.Request) {
+	// chi returns the raw segment when the request path carried escapes that Go's URL
+	// parser does not normalise, so the subject is always unescaped here before use.
+	subject, err := url.PathUnescape(chi.URLParam(r, "subject"))
+	if err != nil || strings.TrimSpace(subject) == "" || len(subject) > maxSubjectLength {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid subject"})
+		return
+	}
+	if deps.Credentials == nil {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "credentials store unavailable"})
+		return
+	}
+	record, err := deps.Credentials.LoadMemberCredentials(r.Context(), subject)
+	if errors.Is(err, store.ErrNotFound) {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "member not found"})
+		return
+	}
+	if err != nil {
+		deps.writeStoreError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, credentials.Build(record))
 }
 
 func (deps Deps) handleCourses(w http.ResponseWriter, r *http.Request) {
