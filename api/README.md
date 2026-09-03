@@ -10,6 +10,8 @@ Go/chi service over PostgreSQL via pgx.
 - `internal/store` resolves database roles, executes the learning transaction, builds
   projections, and loads safeguarding inputs through parameterized SQL.
 - `internal/safeguarding` is a pure derived-eligibility rule with boundary tests.
+- `internal/credentials` builds the `learning-center.credentials.v1` response for the
+  service-to-service route; eligibility and every validity flag come from `internal/safeguarding`.
 - `migrations/0005_progress.up.sql` contains the bounded append-only progress log and
   dashboard projection.
 

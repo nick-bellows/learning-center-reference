@@ -30,6 +30,7 @@ does not pretend that Auth0 or another hosted provider has been tested.
 | Progress transaction and idempotency | `Store.CompleteLesson` in `api/internal/store/store.go` |
 | Event/projection schema | `api/migrations/0005_progress.up.sql` |
 | Eligibility rule and boundaries | `api/internal/safeguarding/eligibility.go` and its tests |
+| Service-to-service credentials contract | `api/internal/credentials`, `authenticateService` in `router.go`, fixtures under `api/testdata/contracts/learning-center.credentials.v1` |
 | API contract | `api/openapi.yaml` and `openapi_test.go` |
 | Learner interaction | `web/app/learn/page.tsx` and `actions.ts` |
 | Administrator interaction | `web/app/admin/compliance/page.tsx` |
@@ -114,6 +115,26 @@ OIDC mode discovers provider metadata and cryptographically verifies the token. 
 two fixed local identifiers to synthetic subjects and must be selected explicitly. The web now
 implements Authorization Code + PKCE, callback, nonce/state verification, encrypted session, and
 logout. Those are tested locally; do not call the path an Auth0 integration until Auth0 is used.
+
+### How does a service token differ from a person token?
+
+A person token identifies a human. The API resolves its subject to a member row and
+authorises on database roles, so a valid token for an unprovisioned person is a 403 and a
+token never carries authority on its own. A service token identifies another system: an
+OAuth2 client-credentials token for this API's audience whose `scope` claim (or `scp`
+array) the identity provider granted to that client. `GET /v1/members/{subject}/credentials`
+verifies it with the same OIDC verifier, authorises on the `credentials:read` scope, and
+never resolves a member for the caller. The two paths share one trust configuration but
+authorise differently: roles from PostgreSQL for people, scopes from the provider for
+services.
+
+Local demo mode mirrors this with `DEMO_SERVICE_TOKEN`, a synthetic identifier mapped to the
+service subject and scope. A person's demo token on the service route is valid but unscoped
+and receives 403, exactly as with a real provider. The response carries only what the
+consumer needs to decide participation (statuses, dates, roles): no hold reasons, display
+names, or dates of birth. The subject appears in the request path and therefore in request
+logs, as member ids already do on the eligibility route; a production deployment would log
+the route pattern instead.
 
 ### What does the accessibility test prove?
 

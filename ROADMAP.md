@@ -1,6 +1,6 @@
 # Roadmap
 
-Last verified: 2026-09-02
+Last verified: 2026-09-03
 
 ## Handoff snapshot
 
@@ -68,6 +68,13 @@ learner completes lessons -> assessment attempt -> passing result
 ```
 
 Eligibility remains derived from underlying facts. Event sourcing remains confined to progress unless a new invariant justifies extending it. Sanity remains an integration seam until course-content editing is needed by this slice; do not provision it for a keyword.
+
+## Bounded step - credentials contract v1
+
+Provider side of `learning-center.credentials.v1`, the read contract consumed by the fictional federation's member-services lab: `GET /v1/members/{subject}/credentials`, authenticated by a service token carrying scope `credentials:read` rather than by a person. This is a bounded step, not the credential-issuance milestone above: it exposes existing credential facts and the existing derived eligibility; nothing is issued.
+
+- Status: **validated** for the handler, the scope middleware, OIDC `scope`/`scp` parsing, the by-subject store query (real-Postgres integration test), the fixture-shape contract test against the consumer's reference responses, and the Compose end-to-end curls in CI using the synthetic demo service token.
+- Status: **planned** for interoperability against the consumer stack with a shared identity provider. No shared provider or client-credentials tenant exists, so only the local demo token path has been exercised end to end.
 
 ## Stop conditions
 
