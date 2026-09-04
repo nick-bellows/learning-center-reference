@@ -129,7 +129,7 @@ PLAYWRIGHT_BASE_URL=http://localhost:3000 npm run test:a11y
 
 CI also starts the complete Compose stack and exercises authentication failures, role
 boundaries, enrollment retry behavior, ordered progress, dashboard persistence, the admin
-view, and all four rendered routes. See `.github/workflows/ci.yml`.
+view, and all five rendered routes. See `.github/workflows/ci.yml`.
 
 ## Engineering decisions
 
@@ -188,4 +188,7 @@ Add assessment attempts and a passing rule, then issue an expiring credential th
 derived eligibility roster and audit history. A hosted recruiter demo is separately prepared but
 remains gated on explicit account and spending approval.
 
-No open-source license has been selected. Choose one before inviting third-party reuse.
+## License
+
+Released under the [MIT License](LICENSE). The data, names, and records in this repository are
+fictional and synthetic; the license covers the code, not any real member information.

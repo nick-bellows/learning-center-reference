@@ -138,7 +138,7 @@ the route pattern instead.
 
 ### What does the accessibility test prove?
 
-It runs axe WCAG 2.0/2.1 A and AA rules against all four rendered routes. It proves only that
+It runs axe WCAG 2.0/2.1 A and AA rules against all five rendered routes. It proves only that
 axe found no automatically detectable violations in that run. It does not prove full WCAG 2.1
 AA conformance; manual keyboard, screen-reader, zoom, and visual review are still required.
 

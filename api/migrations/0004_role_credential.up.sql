@@ -8,7 +8,9 @@ create table role_credential (
     member_id       uuid not null references member(id) on delete cascade,
     -- Which role this credential satisfies. Must be a credential-requiring role.
     role            text not null check (role in ('coach','referee')),
-    -- e.g. 'grassroots_license', 'd_license', 'referee_recert'
+    -- An expiring role credential, e.g. 'c_license', 'd_license', 'referee_recert'. This
+    -- generic table models credentials that expire; non-expiring Grassroots licenses and the
+    -- full license pathway (prerequisite DAG, CEU renewal windows) are future work.
     credential_type text not null,
     issued_at       date not null,
     expires_at      date not null,

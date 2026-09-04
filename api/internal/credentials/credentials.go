@@ -106,12 +106,15 @@ func Build(record Record) Response {
 	roleCredentials := make([]RoleCredentialStatus, 0, len(record.RoleCredentials))
 	for _, credential := range record.RoleCredentials {
 		expires := credential.ExpiresAt
+		// Valid means in effect now: already issued and not expired. A future-dated
+		// credential is reported valid=false, consistent with the eligibility decision.
+		effective := !credential.IssuedAt.After(in.Now)
 		roleCredentials = append(roleCredentials, RoleCredentialStatus{
 			Role:           credential.Role,
 			CredentialType: credential.CredentialType,
 			IssuedAt:       credential.IssuedAt.Format(dateLayout),
 			ExpiresAt:      expires.Format(dateLayout),
-			Valid:          safeguarding.Current(in.Now, &expires, in.GraceDays),
+			Valid:          effective && safeguarding.Current(in.Now, &expires, in.GraceDays),
 		})
 	}
 

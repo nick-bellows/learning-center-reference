@@ -1,11 +1,8 @@
 # studio
 
-> Status: **planned.** Sanity schema for course content.
+> Status: **not provisioned — integration seam only.**
 
-Course/module/lesson *content* is authored here as structured documents; the app reads it. Using a CMS instead of building a content-CRUD is deliberate — it's the point of the Sanity preference in the target stack.
-
-```text
-schemaTypes/course.ts
-schemaTypes/module.ts
-schemaTypes/lesson.ts
-```
+Course, module, and lesson *content* would be authored in a headless CMS and referenced from
+the database by `lesson.content_ref`. No CMS project is provisioned and no schema files exist
+here; this directory marks where that integration would live. Using a CMS instead of building
+content CRUD is a deliberate boundary, not implemented work.

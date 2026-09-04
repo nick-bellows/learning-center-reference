@@ -4,6 +4,10 @@ on:
   push:
   pull_request:
 
+# Least privilege: CI only reads the repository. No job needs write scopes.
+permissions:
+  contents: read
+
 jobs:
   api:
     runs-on: ubuntu-latest
@@ -39,7 +43,7 @@ jobs:
       - name: race detector
         run: go test -race ./...
       - name: govulncheck (reachable vulnerabilities fail the build)
-        run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.1.4 ./...
 
   web:
     runs-on: ubuntu-latest
@@ -151,7 +155,7 @@ jobs:
         run: |
           npm ci
           npx playwright install --with-deps chromium
-      - name: WCAG A/AA automated checks on all four routes
+      - name: WCAG A/AA automated checks on all five routes
         working-directory: web
         env:
           PLAYWRIGHT_BASE_URL: http://localhost:3000
@@ -201,3 +205,15 @@ jobs:
       - name: stop stack and remove synthetic state
         if: always()
         run: docker compose -f compose.yml -f compose.oidc.yml down -v
+
+  # Secret scan over the full history, using the committed .gitleaks.toml allowlist.
+  secret-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: gitleaks (full history; fails the build on any finding)
+        run: |
+          docker run --rm -v "$PWD:/repo" zricethezav/gitleaks:v8.18.4 \
+            detect --source /repo --config /repo/.gitleaks.toml --redact --exit-code 2
