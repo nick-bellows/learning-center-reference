@@ -2,7 +2,7 @@
 # secure base. The final image contains no shell, package manager, or OS cruft.
 
 # --- build stage ---
-FROM golang:1.26-alpine AS build
+FROM golang:1.27-alpine AS build
 WORKDIR /src
 # Copy the module files first and download deps. This layer is cached unless go.mod/go.sum
 # change, so rebuilds are fast when only source changes.
