@@ -54,7 +54,7 @@ jobs:
       NEXT_TELEMETRY_DISABLED: "1"
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: "22"
           cache: npm
@@ -145,7 +145,7 @@ jobs:
         run: |
           docker compose exec -T -e RESET_CONFIRM=synthetic-demo api /resetdemo
           test "$(docker compose exec -T -e PGPASSWORD=change-me-locally db psql -U lcr -d lcr -tAc 'select count(*) from enrollment')" = "0"
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: "22"
           cache: npm
@@ -179,7 +179,7 @@ jobs:
             sleep 2
           done
           echo "OIDC stack never became ready"; exit 1
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: "22"
           cache: npm
