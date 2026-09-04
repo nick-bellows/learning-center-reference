@@ -33,7 +33,7 @@ jobs:
       # of skipping — the skip never hides a break in CI.
       DATABASE_URL: postgres://lcr:ci-only@localhost:5432/lcr?sslmode=disable
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-go@v5
         with:
           go-version: "1.26"
@@ -53,7 +53,7 @@ jobs:
     env:
       NEXT_TELEMETRY_DISABLED: "1"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
@@ -68,7 +68,7 @@ jobs:
   e2e:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - run: docker compose up -d --build
       - name: wait for the API to be ready (health includes a DB ping)
         run: |
@@ -169,7 +169,7 @@ jobs:
   oidc-e2e:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: start local standards-based OIDC stack
         run: docker compose -f compose.yml -f compose.oidc.yml up -d --build
       - name: wait for API and web
@@ -210,7 +210,7 @@ jobs:
   secret-scan:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
       - name: gitleaks (full history; fails the build on any finding)
