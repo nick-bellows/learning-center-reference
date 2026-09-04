@@ -14,9 +14,13 @@ export type ProviderMetadata = {
 export type TokenResponse = {
   access_token: string;
   id_token: string;
-  token_type: string;
-  expires_in: number;
+  token_type?: string;
+  expires_in?: number;
 };
+
+// DEFAULT_TOKEN_LIFETIME_SECONDS is used when the provider omits expires_in (RECOMMENDED,
+// not REQUIRED, by RFC 6749). The API independently enforces the token's own exp claim.
+export const DEFAULT_TOKEN_LIFETIME_SECONDS = 900;
 
 export function randomURLSafe(bytes = 32): string {
   return randomBytes(bytes).toString("base64url");
@@ -67,10 +71,21 @@ export async function exchangeCode(
   });
   if (!response.ok) throw new Error("authorization code exchange failed");
   const tokens = (await response.json()) as TokenResponse;
-  if (!tokens.access_token || !tokens.id_token || tokens.token_type.toLowerCase() !== "bearer") {
+  const tokenType = tokens.token_type ?? "bearer";
+  if (!tokens.access_token || !tokens.id_token || tokenType.toLowerCase() !== "bearer") {
     throw new Error("identity provider returned incomplete tokens");
   }
   return tokens;
+}
+
+// tokenLifetimeSeconds bounds the session lifetime to a sane window even when the provider
+// omits or reports a nonsensical expires_in, so the session's own expiry can never be NaN.
+export function tokenLifetimeSeconds(expiresIn: number | undefined): number {
+  const seconds = Number(expiresIn);
+  if (!Number.isFinite(seconds) || seconds <= 0) {
+    return DEFAULT_TOKEN_LIFETIME_SECONDS;
+  }
+  return Math.min(Math.floor(seconds), 3_600);
 }
 
 export async function verifyIDToken(

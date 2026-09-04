@@ -1,0 +1,3 @@
+# Synthetic portfolio reference implementation. Fictional data only.
+User-agent: *
+Allow: /

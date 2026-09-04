@@ -1,1 +1,1 @@
-drop table role_credential;
+drop table if exists role_credential;

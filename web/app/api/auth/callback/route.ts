@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getWebConfig } from "@/lib/config";
-import { exchangeCode, providerMetadata, verifyIDToken } from "@/lib/oidc";
+import { exchangeCode, providerMetadata, tokenLifetimeSeconds, verifyIDToken } from "@/lib/oidc";
 import { setSession, takeTransaction, valuesMatch } from "@/lib/session";
 
 export async function GET(request: NextRequest) {
@@ -24,7 +24,7 @@ export async function GET(request: NextRequest) {
     const metadata = await providerMetadata();
     const tokens = await exchangeCode(metadata, code, transaction.verifier);
     const subject = await verifyIDToken(metadata, tokens.id_token, transaction.nonce);
-    const lifetime = Math.min(Math.max(tokens.expires_in, 1), 3_600);
+    const lifetime = tokenLifetimeSeconds(tokens.expires_in);
     await setSession({
       accessToken: tokens.access_token,
       subject,

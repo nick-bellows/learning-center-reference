@@ -1,6 +1,5 @@
--- 0003_safeguarding — THE MOAT.
--- These are the independently-expiring INPUTS to a member's participation eligibility.
--- Eligibility itself is NOT stored here. It is COMPUTED in the Go domain layer (and
+-- 0003_safeguarding — the independently-expiring INPUTS to participation eligibility.
+-- Eligibility itself is NOT stored here. It is computed in the Go domain layer (and
 -- unit-tested) from these rows, per docs/domain-model.md section 4. Storing a derived
 -- "eligible" flag would go stale the instant any of these expired.
 
@@ -27,9 +26,9 @@ create table safesport_training (
 );
 create index on safesport_training (member_id);
 
--- Disciplinary hold — Nick's Q1: a flag can come from U.S. Soccer, SafeSport, or a local
--- org depending on where the report originates, and it makes a member ineligible
--- REGARDLESS of their training/check status.
+-- Disciplinary hold — a flag can originate from the federation, the safeguarding center,
+-- or a local organization depending on where the report is filed, and it makes a member
+-- ineligible REGARDLESS of their training/check status.
 create table disciplinary_hold (
     id         uuid primary key default gen_random_uuid(),
     member_id  uuid not null references member(id) on delete cascade,

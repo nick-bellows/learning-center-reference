@@ -1,5 +1,6 @@
 import "server-only";
 
+import { connection } from "next/server";
 import { getWebConfig } from "./config";
 import { readSession } from "./session";
 
@@ -85,6 +86,10 @@ export async function getViewerState(): Promise<{
   signedIn: boolean;
   subject?: string;
 }> {
+  // The header nav depends on request state (deployment auth mode and, in OIDC mode, the
+  // session cookie), so it must never be baked into a static prerender. Without this, a
+  // build with no auth env set freezes "local demo" into the landing and error pages.
+  await connection();
   const config = getWebConfig();
   const session = config.authMode === "oidc" ? await readSession() : null;
   return { authMode: config.authMode, signedIn: config.authMode === "demo" || Boolean(session), subject: session?.subject };

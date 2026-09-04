@@ -52,3 +52,29 @@ func TestRateLimitMiddlewareUsesForwardedAddressOnlyWhenTrusted(t *testing.T) {
 		t.Fatalf("repeat status = %d", status)
 	}
 }
+
+// A client cannot escape its window by prepending spoofed X-Forwarded-For entries: the
+// rightmost address, appended by the trusted proxy, is the one the limiter keys on.
+func TestRateLimitMiddlewareUsesRightmostForwardedEntry(t *testing.T) {
+	limiter := newClientRateLimiter(1, time.Minute, true)
+	handler := limiter.middleware(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}))
+
+	request := func(forwarded string) int {
+		req := httptest.NewRequest(http.MethodGet, "/v1/courses", nil)
+		req.RemoteAddr = "127.0.0.1:1234"
+		req.Header.Set("X-Forwarded-For", forwarded)
+		res := httptest.NewRecorder()
+		handler.ServeHTTP(res, req)
+		return res.Code
+	}
+
+	if status := request("192.0.2.50"); status != http.StatusNoContent {
+		t.Fatalf("first request status = %d", status)
+	}
+	// Same real client (rightmost 192.0.2.50), only the spoofed leftmost value changed.
+	if status := request("10.0.0.9, 192.0.2.50"); status != http.StatusTooManyRequests {
+		t.Fatalf("spoofed-prefix retry status = %d; want 429", status)
+	}
+}

@@ -133,6 +133,7 @@ view, and all four rendered routes. See `.github/workflows/ci.yml`.
 
 ## Engineering decisions
 
+- [Why we keep architecture decision records](docs/decisions/0001-record-architecture-decisions.md)
 - [Go for the API](docs/decisions/0002-go-for-the-api.md)
 - [Confine event sourcing to learner progress](docs/decisions/0003-event-sourcing-scope.md)
 - [Historical hosting option](docs/decisions/0004-hosting-vercel-fly-auth0-sanity.md)
@@ -140,6 +141,7 @@ view, and all four rendered routes. See `.github/workflows/ci.yml`.
 - [Local OIDC and public-demo boundary](docs/decisions/0006-local-oidc-and-public-demo-boundary.md)
 - [Prepared recruiter-demo runbook](docs/deploy-recruiter-demo.md)
 - [Domain model and assumptions](docs/domain-model.md)
+- [Glossary of domain and technical terms](docs/glossary.md)
 - [Interview guide](docs/INTERVIEW_GUIDE.md)
 
 ## Security and privacy boundaries

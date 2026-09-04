@@ -2,3 +2,7 @@ bin/
 tmp/
 *.log
 *.test
+*_test.go
+testdata/
+.env
+.env.*

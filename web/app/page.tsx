@@ -71,7 +71,7 @@ export default function Home() {
             <div className="evidence-links">
               <a href={`${repository}/blob/main/api/internal/store/store.go`}>Read transaction</a>
               <a href={`${repository}/blob/main/api/migrations/0005_progress.up.sql`}>Read schema</a>
-              <a href={`${repository}/blob/main/api/internal/store/store_integration_test.go`}>Read integration test</a>
+              <a href={`${repository}/blob/main/api/internal/store/store_test.go`}>Read integration test</a>
             </div>
           </li>
           <li className="card">

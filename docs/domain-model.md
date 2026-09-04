@@ -1,8 +1,8 @@
 # Domain Model
 
-> Status: **reference model with a bounded implemented slice.** Learning progress, roles, generic role credentials, safeguarding inputs, and overall eligibility are implemented. Coaching pathways, referee grades, assessment attempts, certificate issuance, and age-cohort rules remain design notes. Modeled from public sources and Nick's general domain knowledge; no employer-internal process or data appears here. Real-world requirements change and vary by organization, so this is not an authoritative compliance reference.
+> Status: **reference model with a bounded implemented slice.** Learning progress, roles, generic role credentials, safeguarding inputs, and overall eligibility are implemented. Coaching pathways, referee grades, assessment attempts, certificate issuance, and age-cohort rules remain design notes. Modeled from public sources and the author's general domain knowledge; no employer-internal process or data appears here. Real-world requirements change and vary by organization, so this is not an authoritative compliance reference.
 >
-> **Confidence tags:** `[sourced]` = from a cited public page; `[domain]` = from Nick's experience; `[assumption]` = a modeling default to confirm.
+> **Confidence tags:** `[sourced]` = from a cited public page; `[domain]` = from the author's experience; `[assumption]` = a modeling default to confirm.
 
 ---
 
@@ -92,7 +92,7 @@ tests the boundary, but the store currently supplies zero because no organizatio
 
 **Player exclusion `[domain]`:** players who are minors (18U/19U, etc.) are **not** subject to the adult SafeSport/background-check requirements. Eligibility rules above apply to **adult roles**. Minor-player rules are out of scope beyond noting the exclusion.
 
-**Age & cohort determination `[domain]` (Nick):** whether someone is a *minor* — and, for players, which *age group* they fall in — is derived from **`date_of_birth` + the organization's cutoff rule**, never from a stored `age`. Cohorts are defined either by **birth year** or by **school year with an org-specific cutoff date** (e.g. Aug 1, June 30 — it varies by association/competition). A plain age can't express this distinction. It also sharpens the SafeSport rule ("players turning 18 *during the seasonal year*"): the minor/adult line keys off the **seasonal year + cutoff**, not today's date. Model the cutoff as a rule on the association/competition and derive minor status + age group from it. *(Schema already stores `date_of_birth`; the cutoff rule is added when age-group logic is needed.)*
+**Age & cohort determination `[domain]`:** whether someone is a *minor* — and, for players, which *age group* they fall in — is derived from **`date_of_birth` + the organization's cutoff rule**, never from a stored `age`. Cohorts are defined either by **birth year** or by **school year with an org-specific cutoff date** (e.g. Aug 1, June 30 — it varies by association/competition). A plain age can't express this distinction. It also sharpens the SafeSport rule ("players turning 18 *during the seasonal year*"): the minor/adult line keys off the **seasonal year + cutoff**, not today's date. Model the cutoff as a rule on the association/competition and derive minor status + age group from it. *(Schema already stores `date_of_birth`; the cutoff rule is added when age-group logic is needed.)*
 
 **Administrator expiration view:** the implemented dashboard exposes each member's earliest
 credential expiration. Separate 30/60/90-day groupings and notification jobs are planned.
