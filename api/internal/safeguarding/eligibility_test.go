@@ -5,12 +5,9 @@ import (
 	"time"
 )
 
-// ptr returns a pointer to t. Struct literals can't take the address of a value directly,
-// so this small helper keeps the test cases readable.
+// ptr returns a pointer to t, keeping the optional-date test cases readable.
 func ptr(t time.Time) *time.Time { return &t }
 
-// TestEvaluate is a "table-driven test" — the idiomatic Go style. We list cases in a slice,
-// then loop over them and run each as a named subtest. Adding a case is one line.
 func TestEvaluate(t *testing.T) {
 	now := time.Date(2026, 8, 8, 0, 0, 0, 0, time.UTC)
 	future := now.AddDate(0, 1, 0) // one month from now

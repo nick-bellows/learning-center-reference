@@ -12,12 +12,12 @@ create table member_association (
 -- A person in the system. One row per human.
 create table member (
     id             uuid primary key default gen_random_uuid(),
-    -- Auth0's "sub" (subject) claim. Links this row to the external identity provider.
-    -- Nullable so we can seed synthetic members who never actually log in.
+    -- The identity provider's "sub" (subject) claim links this row to the external IdP.
+    -- Nullable so synthetic members who never sign in can be seeded.
     auth_subject   text unique,
     display_name   text not null,
-    -- We store date_of_birth and DERIVE "is this person a minor?" at query time.
-    -- Never store the derived age — it goes stale the moment a birthday passes.
+    -- date_of_birth is stored; minor/adult status is derived at query time rather than
+    -- stored as an age, which would go stale the moment a birthday passes.
     date_of_birth  date,
     association_id uuid references member_association(id) on delete set null,
     created_at     timestamptz not null default now()

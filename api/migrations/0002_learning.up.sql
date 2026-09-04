@@ -6,8 +6,7 @@ create table course (
     association_id uuid references member_association(id) on delete set null,
     title          text not null,
     slug           text not null unique,
-    -- Nick's Q4: "depends on the course, usually in order."
-    -- 'sequential' = lessons must be done in order; 'open' = any order.
+    -- 'sequential' = lessons must be completed in order; 'open' = any order.
     ordering       text not null default 'sequential' check (ordering in ('sequential','open')),
     status         text not null default 'draft'      check (status in ('draft','published','archived')),
     created_at     timestamptz not null default now()
@@ -27,7 +26,7 @@ create table lesson (
     title       text not null,
     lesson_type text not null check (lesson_type in ('video','reading','quiz')),
     position    int  not null,
-    -- Rich lesson content lives in Sanity (headless CMS). We store only its reference.
+    -- Rich lesson content lives in a headless CMS; only a stable content reference is stored.
     content_ref text,
     unique (module_id, position)
 );

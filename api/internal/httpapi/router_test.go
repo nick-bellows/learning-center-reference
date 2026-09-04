@@ -13,9 +13,7 @@ import (
 	"github.com/nick-bellows/learning-center-reference/api/internal/store"
 )
 
-// TestHealth exercises the router without opening a real network port: httptest gives us
-// a fake request and a recorder that captures the response. Deps{} is empty because the
-// /health route doesn't need the store.
+// TestHealth checks the health route with no store configured.
 func TestHealth(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/health", nil)
 	rec := httptest.NewRecorder()
@@ -39,8 +37,8 @@ type failingPinger struct{}
 
 func (failingPinger) Ping(context.Context) error { return errors.New("connection refused") }
 
-// TestHealth_DatabaseDown: /health is a READINESS check — with a database
-// configured but unreachable, it must say so with a 503, not a hollow "ok".
+// TestHealth_DatabaseDown: with a database configured but unreachable, readiness must
+// report 503 rather than a hollow "ok".
 func TestHealth_DatabaseDown(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/health", nil)
 	rec := httptest.NewRecorder()
@@ -52,9 +50,8 @@ func TestHealth_DatabaseDown(t *testing.T) {
 	}
 }
 
-// TestEligibility_InvalidID: a malformed member id is the CLIENT's error.
-// It must be rejected as 400 before touching the database (which would have
-// turned a bad path parameter into a 500 cast error).
+// TestEligibility_InvalidID: a malformed member id must be rejected as 400 before it
+// reaches the database, where a bad path parameter would become a 500 cast error.
 func TestEligibility_InvalidID(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/v1/members/not-a-uuid/eligibility", nil)
 	rec := httptest.NewRecorder()

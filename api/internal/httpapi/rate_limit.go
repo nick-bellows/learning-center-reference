@@ -81,10 +81,17 @@ func clientAddress(r *http.Request) string {
 	return r.RemoteAddr
 }
 
+// proxiedClientAddress reads the rightmost X-Forwarded-For entry. Clients can prepend
+// arbitrary values, but a single trusted proxy in front of the service appends the address
+// it actually observed, so the last entry is the spoof-resistant one. Enable this only when
+// exactly one trusted proxy sits ahead of the service (TRUST_PROXY=1).
 func proxiedClientAddress(r *http.Request) string {
-	first, _, _ := strings.Cut(r.Header.Get("X-Forwarded-For"), ",")
-	if parsed := net.ParseIP(strings.TrimSpace(first)); parsed != nil {
-		return parsed.String()
+	forwarded := r.Header.Get("X-Forwarded-For")
+	entries := strings.Split(forwarded, ",")
+	for i := len(entries) - 1; i >= 0; i-- {
+		if parsed := net.ParseIP(strings.TrimSpace(entries[i])); parsed != nil {
+			return parsed.String()
+		}
 	}
 	return clientAddress(r)
 }

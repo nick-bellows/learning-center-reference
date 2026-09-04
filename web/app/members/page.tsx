@@ -1,8 +1,7 @@
-// This rules-focused page intentionally names the three fixed synthetic examples.
+import { getWebConfig } from "@/lib/config";
+
+// The three fixed synthetic examples for the public, unauthenticated eligibility endpoint.
 // The authenticated administrator roster comes from /v1/admin/compliance instead.
-
-const API_BASE = process.env.API_BASE_URL ?? "http://localhost:8080";
-
 const DEMO_MEMBERS = [
   { id: "11111111-1111-1111-1111-111111111111", label: "Alex Coach" },
   { id: "22222222-2222-2222-2222-222222222222", label: "Sam Referee" },
@@ -17,7 +16,7 @@ type Eligibility = {
 
 async function fetchEligibility(id: string): Promise<Eligibility | null> {
   try {
-    const res = await fetch(`${API_BASE}/v1/members/${id}/eligibility`, {
+    const res = await fetch(`${getWebConfig().apiBaseUrl}/v1/members/${id}/eligibility`, {
       cache: "no-store",
     });
     if (!res.ok) return null;
@@ -27,23 +26,16 @@ async function fetchEligibility(id: string): Promise<Eligibility | null> {
   }
 }
 
-function StatusBadge({ status }: { status?: string }) {
-  const styles: Record<string, string> = {
-    eligible: "bg-green-100 text-green-800 ring-green-600/20",
-    suspended: "bg-red-100 text-red-800 ring-red-600/20",
-    ineligible_lapsed: "bg-amber-100 text-amber-800 ring-amber-600/20",
-  };
-  const cls = (status && styles[status]) || "bg-gray-100 text-gray-700 ring-gray-500/20";
-  return (
-    <span className={`inline-flex rounded-full px-2 py-1 text-xs font-medium ring-1 ring-inset ${cls}`}>
-      {status ?? "unknown"}
-    </span>
-  );
+function statusClass(status: string | undefined): string {
+  if (status === "eligible") return "status status-good";
+  if (status === "suspended") return "status status-danger";
+  if (status === "ineligible_lapsed") return "status status-warning";
+  return "status status-active";
 }
 
 export default async function MembersPage() {
   const rows = await Promise.all(
-    DEMO_MEMBERS.map(async (m) => ({ ...m, elig: await fetchEligibility(m.id) })),
+    DEMO_MEMBERS.map(async (member) => ({ ...member, eligibility: await fetchEligibility(member.id) })),
   );
 
   return (
@@ -54,28 +46,34 @@ export default async function MembersPage() {
         Eligibility is computed live from each member&rsquo;s safeguarding records.
       </p>
 
-      <div className="card mt-8 overflow-x-auto">
-      <table>
-        <thead>
-          <tr className="border-b border-gray-200">
-            <th className="py-2 pr-4 font-medium">Member</th>
-            <th className="py-2 pr-4 font-medium">Status</th>
-            <th className="py-2 font-medium">Reason</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((r) => (
-            <tr key={r.id} className="border-b border-gray-100">
-              <td className="py-3 pr-4">{r.label}</td>
-              <td className="py-3 pr-4">
-                <StatusBadge status={r.elig?.status} />
-              </td>
-              <td className="py-3 text-gray-600">{r.elig?.reason ?? "API unavailable"}</td>
+      <section className="card mt-8 overflow-x-auto" aria-labelledby="examples-title">
+        <div className="mb-5">
+          <p className="eyebrow">Live rules evaluation</p>
+          <h2 id="examples-title">Fixed synthetic examples</h2>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>Member</th>
+              <th>Status</th>
+              <th>Reason</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
-      </div>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr key={row.id}>
+                <td className="font-medium text-slate-950">{row.label}</td>
+                <td>
+                  <span className={statusClass(row.eligibility?.status)}>
+                    {row.eligibility ? row.eligibility.status.replace("_", " ") : "unknown"}
+                  </span>
+                </td>
+                <td className="text-slate-600">{row.eligibility?.reason ?? "API unavailable"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </section>
     </main>
   );
 }

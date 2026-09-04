@@ -7,7 +7,6 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
-	"net/url"
 	"regexp"
 	"strings"
 	"time"
@@ -274,10 +273,9 @@ func (deps Deps) handleEligibility(w http.ResponseWriter, r *http.Request) {
 const maxSubjectLength = 255
 
 func (deps Deps) handleMemberCredentials(w http.ResponseWriter, r *http.Request) {
-	// chi returns the raw segment when the request path carried escapes that Go's URL
-	// parser does not normalise, so the subject is always unescaped here before use.
-	subject, err := url.PathUnescape(chi.URLParam(r, "subject"))
-	if err != nil || strings.TrimSpace(subject) == "" || len(subject) > maxSubjectLength {
+	// chi already percent-decodes the path parameter, so the subject is used as-is.
+	subject := chi.URLParam(r, "subject")
+	if strings.TrimSpace(subject) == "" || len(subject) > maxSubjectLength {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid subject"})
 		return
 	}

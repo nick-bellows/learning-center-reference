@@ -39,7 +39,7 @@ func New(ctx context.Context, databaseURL string) (*Store, error) {
 	return &Store{pool: pool}, nil
 }
 
-// Close releases the pool. main() defers this so it runs on shutdown.
+// Close releases the connection pool.
 func (s *Store) Close() { s.pool.Close() }
 
 // Pool exposes the underlying pool for setup tasks (migrations, seeding).
@@ -219,20 +219,32 @@ func (s *Store) CompleteLesson(ctx context.Context, memberID, enrollmentID, less
 	}
 	created := tag.RowsAffected() == 1
 
+	// Recompute BOTH counts from source in one statement: completed from the append-only
+	// event log, total from the course's current lessons. Deriving total here (rather than
+	// trusting the enrollment-time snapshot) keeps the projection consistent with its check
+	// constraints even if a course gains lessons after a learner enrolls.
 	if _, err := tx.Exec(ctx, `
-		with counts as (
-			select count(*)::int as completed
+		with completed as (
+			select count(*)::int as n
 			from progress_event
 			where enrollment_id = $1::uuid and event_type = 'lesson_completed'
+		),
+		total as (
+			select count(l.id)::int as n
+			from enrollment e
+			join module m on m.course_id = e.course_id
+			join lesson l on l.module_id = m.id
+			where e.id = $1::uuid
 		)
 		update enrollment_progress ep
-		set completed_lessons = counts.completed,
+		set completed_lessons = completed.n,
+		    total_lessons = total.n,
 		    percent_complete = case
-		        when ep.total_lessons = 0 then 0
-		        else (counts.completed * 100 / ep.total_lessons)
+		        when total.n = 0 then 0
+		        else (completed.n * 100 / total.n)
 		    end,
 		    updated_at = now()
-		from counts
+		from completed, total
 		where ep.enrollment_id = $1::uuid`, enrollmentID); err != nil {
 		return learning.EnrollmentProgress{}, false, fmt.Errorf("projecting completion: %w", err)
 	}
@@ -457,7 +469,7 @@ func (s *Store) LoadSafeguardingInputs(ctx context.Context, memberID string) (sa
 	if err != nil {
 		return in, fmt.Errorf("holds: %w", err)
 	}
-	defer rows.Close() // always release the rows, even on an early return
+	defer rows.Close()
 	for rows.Next() {
 		var source string
 		if err := rows.Scan(&source); err != nil {

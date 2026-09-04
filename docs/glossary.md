@@ -1,6 +1,6 @@
 # Glossary
 
-> Plain-language definitions of terms as they come up. Written so Nick can explain each in an interview. Add to it whenever a new term appears.
+> Plain-language definitions of the domain and technical terms used across this repository.
 
 ### Database / schema
 - **Migration** — a versioned file that changes the database schema. `.up.sql` applies the change; `.down.sql` reverses it. Running them in order builds the whole schema from nothing, reproducibly.

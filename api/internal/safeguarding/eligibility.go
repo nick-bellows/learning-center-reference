@@ -1,9 +1,9 @@
-// Package safeguarding computes whether an adult participant is currently eligible to
-// participate, derived from their safeguarding inputs. Eligibility is NEVER stored — it is
+// Package safeguarding computes whether a participant in an adult role is currently
+// eligible, derived from their safeguarding inputs. Eligibility is NEVER stored — it is
 // recomputed from facts every time it is asked (see docs/domain-model.md section 4).
 //
-// Precondition: call this only for adult participants. Minors/players are exempt from these
-// requirements; that gate happens before we get here.
+// The implemented slice models adult roles only. Minor-player exemptions are documented in
+// the domain model but not yet enforced here, so callers currently pass adult members.
 package safeguarding
 
 import (
@@ -18,8 +18,8 @@ const (
 	StatusEligible   Status = "eligible"
 	StatusSuspended  Status = "suspended"         // an active disciplinary hold
 	StatusIneligible Status = "ineligible_lapsed" // a required credential missing or expired
-	// StatusProvisional is planned: added once "pending / in-progress" states are wired from
-	// the database (e.g. background_check.status = 'pending').
+	// A distinct "provisional" status is intentionally omitted: the current schema does not
+	// carry enough workflow state to separate pending review from missing evidence.
 )
 
 // Inputs are the facts about ONE adult participant, evaluated as of Now.

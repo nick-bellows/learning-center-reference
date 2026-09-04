@@ -1,8 +1,13 @@
 -- Synthetic, fictional seed data for LOCAL demo/testing ONLY.
 -- No real people. Do not add real member data to this file.
 --
--- Fully idempotent: every insert has a fixed id + ON CONFLICT DO NOTHING, so
--- the API can apply it on every startup (SEED_FILE) without duplicating rows.
+-- Idempotent: every insert has a fixed id and an ON CONFLICT clause, so the API can apply
+-- it on every startup (SEED_FILE) without duplicating rows. The member row uses DO UPDATE
+-- so a re-seed refreshes auth_subject; every other row uses DO NOTHING.
+--
+-- Credential dates are relative to the moment of the first seed (current_date +/- an
+-- interval), not hard-coded calendar dates, so the derived-eligibility demo shows the same
+-- statuses whenever the project is cloned instead of silently lapsing on a fixed date.
 --
 -- The learner, two referee examples, and administrator demonstrate role-based views:
 --   Alex Coach    -> eligible          (everything current, incl. coaching license)
@@ -29,28 +34,28 @@ insert into member_role (member_id, role) values
   ('44444444-4444-4444-4444-444444444444', 'admin')
 on conflict do nothing;
 
--- Background checks: all three current.
+-- Background checks: all four current (valid ~2 years).
 insert into background_check (id, member_id, source, approved_at, expires_at, status) values
-  ('aaaa0000-0000-0000-0000-000000000001', '11111111-1111-1111-1111-111111111111', 'sample-ysa', '2026-01-01', '2028-01-01', 'approved'),
-  ('aaaa0000-0000-0000-0000-000000000002', '22222222-2222-2222-2222-222222222222', 'sample-ysa', '2026-01-01', '2028-01-01', 'approved'),
-  ('aaaa0000-0000-0000-0000-000000000003', '33333333-3333-3333-3333-333333333333', 'sample-ysa', '2026-01-01', '2028-01-01', 'approved'),
-  ('aaaa0000-0000-0000-0000-000000000004', '44444444-4444-4444-4444-444444444444', 'sample-ysa', '2026-01-01', '2028-01-01', 'approved')
+  ('aaaa0000-0000-0000-0000-000000000001', '11111111-1111-1111-1111-111111111111', 'sample-ysa', current_date - interval '3 months', (current_date + interval '2 years')::date, 'approved'),
+  ('aaaa0000-0000-0000-0000-000000000002', '22222222-2222-2222-2222-222222222222', 'sample-ysa', current_date - interval '3 months', (current_date + interval '2 years')::date, 'approved'),
+  ('aaaa0000-0000-0000-0000-000000000003', '33333333-3333-3333-3333-333333333333', 'sample-ysa', current_date - interval '3 months', (current_date + interval '2 years')::date, 'approved'),
+  ('aaaa0000-0000-0000-0000-000000000004', '44444444-4444-4444-4444-444444444444', 'sample-ysa', current_date - interval '3 months', (current_date + interval '2 years')::date, 'approved')
 on conflict do nothing;
 
--- SafeSport: all three current.
+-- SafeSport: all four current (annual refresher).
 insert into safesport_training (id, member_id, training_type, completed_at, expires_at) values
-  ('bbbb0000-0000-0000-0000-000000000001', '11111111-1111-1111-1111-111111111111', 'core', '2026-06-01', '2027-06-01'),
-  ('bbbb0000-0000-0000-0000-000000000002', '22222222-2222-2222-2222-222222222222', 'core', '2026-06-01', '2027-06-01'),
-  ('bbbb0000-0000-0000-0000-000000000003', '33333333-3333-3333-3333-333333333333', 'core', '2026-06-01', '2027-06-01'),
-  ('bbbb0000-0000-0000-0000-000000000004', '44444444-4444-4444-4444-444444444444', 'core', '2026-06-01', '2027-06-01')
+  ('bbbb0000-0000-0000-0000-000000000001', '11111111-1111-1111-1111-111111111111', 'core', current_date - interval '2 months', (current_date + interval '10 months')::date),
+  ('bbbb0000-0000-0000-0000-000000000002', '22222222-2222-2222-2222-222222222222', 'core', current_date - interval '2 months', (current_date + interval '10 months')::date),
+  ('bbbb0000-0000-0000-0000-000000000003', '33333333-3333-3333-3333-333333333333', 'core', current_date - interval '2 months', (current_date + interval '10 months')::date),
+  ('bbbb0000-0000-0000-0000-000000000004', '44444444-4444-4444-4444-444444444444', 'core', current_date - interval '2 months', (current_date + interval '10 months')::date)
 on conflict do nothing;
 
--- Role credentials: Alex's coaching license and Sam's recert are current;
--- Riley's referee recertification EXPIRED — the lapse that flips eligibility.
+-- Role credentials: Alex's coaching license and Sam's recert are current; Riley's referee
+-- recertification is EXPIRED — the lapse that flips Riley's eligibility to ineligible_lapsed.
 insert into role_credential (id, member_id, role, credential_type, issued_at, expires_at) values
-  ('cccc0000-0000-0000-0000-000000000001', '11111111-1111-1111-1111-111111111111', 'coach',   'grassroots_license', '2025-02-01', '2027-02-01'),
-  ('cccc0000-0000-0000-0000-000000000002', '22222222-2222-2222-2222-222222222222', 'referee', 'referee_recert',     '2026-01-15', '2027-01-15'),
-  ('cccc0000-0000-0000-0000-000000000003', '33333333-3333-3333-3333-333333333333', 'referee', 'referee_recert',     '2024-01-15', '2025-01-15')
+  ('cccc0000-0000-0000-0000-000000000001', '11111111-1111-1111-1111-111111111111', 'coach',   'grassroots_license', current_date - interval '1 year',  (current_date + interval '1 year')::date),
+  ('cccc0000-0000-0000-0000-000000000002', '22222222-2222-2222-2222-222222222222', 'referee', 'referee_recert',     current_date - interval '6 months', (current_date + interval '6 months')::date),
+  ('cccc0000-0000-0000-0000-000000000003', '33333333-3333-3333-3333-333333333333', 'referee', 'referee_recert',     current_date - interval '18 months', (current_date - interval '8 months')::date)
 on conflict do nothing;
 
 -- Sam's active hold (lifted_at NULL = active): overrides everything above.
