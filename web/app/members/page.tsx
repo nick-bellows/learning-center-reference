@@ -64,8 +64,10 @@ export default async function MembersPage() {
               <tr key={row.id}>
                 <td className="font-medium text-slate-950">{row.label}</td>
                 <td>
+                  {/* This troubleshooting view shows the literal rule output (e.g.
+                      ineligible_lapsed), not a humanized label. */}
                   <span className={statusClass(row.eligibility?.status)}>
-                    {row.eligibility ? row.eligibility.status.replace("_", " ") : "unknown"}
+                    {row.eligibility ? row.eligibility.status : "unknown"}
                   </span>
                 </td>
                 <td className="text-slate-600">{row.eligibility?.reason ?? "API unavailable"}</td>
