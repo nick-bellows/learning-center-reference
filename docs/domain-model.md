@@ -42,7 +42,8 @@ Grassroots (online modules + in-person modules: 4v4 → 7v7 → 9v9 → 11v11)
 **Expiry & renewal `[sourced]`** ([US Soccer CPD FAQ](https://s3.us-east-2.amazonaws.com/aws-s2-images.ussoccer.com/coaches/CPD-FAQs-Coaches.pdf)):
 - **Grassroots licenses do NOT expire.**
 - **C, B, A, Pro** require **Continuing Education Units (CEUs) within a rolling 3-year cycle**; miss the CEUs → license marked **expired**. Excess CEUs do **not** roll into the next cycle.
-- **Modeling decision:** a `License` carries `issued_at`, an optional `expires_at` (null for Grassroots), and (for C+) a `renewal_window` with a required CEU count. CEUs are records tied to the license's current cycle.
+- **Modeling decision (design):** a `License` carries `issued_at`, an optional `expires_at` (null for Grassroots), and (for C+) a `renewal_window` with a required CEU count. CEUs are records tied to the license's current cycle.
+- **Implemented vs. design:** the shipped `role_credential` table is a *generic, expiring* credential — `expires_at` is mandatory — because the current slice only needs the expiring case (a C+/D coaching license or an annual referee recertification) to drive eligibility. Non-expiring Grassroots licenses (a nullable `expires_at`), the prerequisite DAG, and CEU renewal windows are future work; the seeded coach therefore holds a `c_license`, not a Grassroots license.
 
 ---
 

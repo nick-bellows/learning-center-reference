@@ -53,7 +53,7 @@ on conflict do nothing;
 -- Role credentials: Alex's coaching license and Sam's recert are current; Riley's referee
 -- recertification is EXPIRED — the lapse that flips Riley's eligibility to ineligible_lapsed.
 insert into role_credential (id, member_id, role, credential_type, issued_at, expires_at) values
-  ('cccc0000-0000-0000-0000-000000000001', '11111111-1111-1111-1111-111111111111', 'coach',   'grassroots_license', current_date - interval '1 year',  (current_date + interval '1 year')::date),
+  ('cccc0000-0000-0000-0000-000000000001', '11111111-1111-1111-1111-111111111111', 'coach',   'c_license',      current_date - interval '1 year',  (current_date + interval '1 year')::date),
   ('cccc0000-0000-0000-0000-000000000002', '22222222-2222-2222-2222-222222222222', 'referee', 'referee_recert',     current_date - interval '6 months', (current_date + interval '6 months')::date),
   ('cccc0000-0000-0000-0000-000000000003', '33333333-3333-3333-3333-333333333333', 'referee', 'referee_recert',     current_date - interval '18 months', (current_date - interval '8 months')::date)
 on conflict do nothing;

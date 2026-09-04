@@ -8,22 +8,29 @@ export default function Home() {
       <section className="home-hero">
         <div>
           <p className="eyebrow">Learning Center Reference</p>
-          <h1>Learning progress and participation eligibility, connected.</h1>
+          <h1>Learning progress and participation eligibility, modeled as two workflows.</h1>
           <p className="lede max-w-3xl">
-            A small, runnable reference implementation for the multi-role education and
-            compliance workflows a soccer organization has to operate reliably.
+            A small, runnable reference implementation of two workflows a soccer organization
+            must run reliably: course progress, and participation eligibility derived from
+            safeguarding records. They are kept deliberately separate; issuing a credential
+            from course completion is the next roadmap milestone, not current behavior.
           </p>
           <div className="mt-7 flex flex-wrap gap-3">
             <Link className="button button-primary" href="/learn">Open learner workspace</Link>
             <Link className="button button-secondary" href="/admin/compliance">Open admin compliance</Link>
           </div>
         </div>
-        <div className="workflow-card" aria-label="Implemented workflow">
+        <div className="workflow-card" aria-label="Two implemented workflows">
+          <p className="eyebrow">Learner progress</p>
           <span>Verified identity</span><b aria-hidden="true">&rarr;</b>
           <span>Database role</span><b aria-hidden="true">&rarr;</b>
-          <span>Course enrollment</span><b aria-hidden="true">&rarr;</b>
-          <span>Progress events</span><b aria-hidden="true">&rarr;</b>
-          <span>Eligibility view</span>
+          <span>Enrollment</span><b aria-hidden="true">&rarr;</b>
+          <span>Ordered completions</span><b aria-hidden="true">&rarr;</b>
+          <span>Dashboard projection</span>
+          <p className="eyebrow" style={{ marginTop: "0.5rem" }}>Participation eligibility</p>
+          <span>Credential &amp; hold facts</span><b aria-hidden="true">&rarr;</b>
+          <span>Derived at read time</span><b aria-hidden="true">&rarr;</b>
+          <span>Compliance roster</span>
         </div>
       </section>
 

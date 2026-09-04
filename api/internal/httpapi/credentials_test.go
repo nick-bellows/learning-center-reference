@@ -61,7 +61,7 @@ func eligibleLearnerRecord() credentials.Record {
 			RoleCredentialExpires:  dateOf(2027, 2, 1),
 		},
 		RoleCredentials: []credentials.RoleCredential{{
-			Role: "coach", CredentialType: "grassroots_license",
+			Role: "coach", CredentialType: "c_license",
 			IssuedAt: *dateOf(2025, 2, 1), ExpiresAt: *dateOf(2027, 2, 1),
 		}},
 	}

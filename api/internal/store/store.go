@@ -450,21 +450,26 @@ func (s *Store) LoadSafeguardingInputs(ctx context.Context, memberID string) (sa
 		return in, fmt.Errorf("looking up member: %w", err)
 	}
 
-	// Latest approved background-check expiry, and latest SafeSport expiry.
+	// Latest approved background-check expiry, and latest SafeSport expiry. Only records
+	// already in effect count: a future-dated approval/completion must not grant eligibility
+	// before it begins.
 	if in.BackgroundCheckExpires, err = s.maxDate(ctx,
-		`select max(expires_at) from background_check where member_id = $1::uuid and status = 'approved'`,
+		`select max(expires_at) from background_check
+		 where member_id = $1::uuid and status = 'approved' and approved_at <= current_date`,
 		memberID); err != nil {
 		return in, fmt.Errorf("background check: %w", err)
 	}
 	if in.SafeSportExpires, err = s.maxDate(ctx,
-		`select max(expires_at) from safesport_training where member_id = $1::uuid`,
+		`select max(expires_at) from safesport_training
+		 where member_id = $1::uuid and completed_at <= current_date`,
 		memberID); err != nil {
 		return in, fmt.Errorf("safesport: %w", err)
 	}
 
-	// Active disciplinary holds (lifted_at is null). Any row here means suspended.
+	// Active disciplinary holds: not lifted and already placed. Any row here means suspended.
 	rows, err := s.pool.Query(ctx,
-		`select source from disciplinary_hold where member_id = $1::uuid and lifted_at is null`,
+		`select source from disciplinary_hold
+		 where member_id = $1::uuid and lifted_at is null and placed_at <= now()`,
 		memberID)
 	if err != nil {
 		return in, fmt.Errorf("holds: %w", err)
@@ -492,6 +497,7 @@ func (s *Store) LoadSafeguardingInputs(ctx context.Context, memberID string) (sa
 		from member_role mr
 		left join role_credential rc
 		  on rc.member_id = mr.member_id and rc.role = mr.role
+		 and rc.issued_at <= current_date
 		where mr.member_id = $1::uuid and mr.role in ('coach','referee')
 		group by mr.role`,
 		memberID)

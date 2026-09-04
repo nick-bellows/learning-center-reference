@@ -123,16 +123,22 @@ func securityHeaders(next http.Handler) http.Handler {
 	})
 }
 
-// requestLogger emits operational metadata without authorization headers or PII.
+// requestLogger emits operational metadata without authorization headers or PII. It logs the
+// matched route pattern (e.g. "/v1/members/{subject}/credentials") rather than the raw path,
+// so an identity-provider subject or member UUID in the URL never reaches the logs.
 func (deps Deps) requestLogger(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		started := time.Now()
 		wrapped := middleware.NewWrapResponseWriter(w, r.ProtoMajor)
 		next.ServeHTTP(wrapped, r)
+		route := chi.RouteContext(r.Context()).RoutePattern()
+		if route == "" {
+			route = "unmatched"
+		}
 		deps.Logger.InfoContext(r.Context(), "http request",
 			"request_id", middleware.GetReqID(r.Context()),
 			"method", r.Method,
-			"path", r.URL.Path,
+			"route", route,
 			"status", wrapped.Status(),
 			"duration_ms", time.Since(started).Milliseconds(),
 		)

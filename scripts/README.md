@@ -1,8 +1,9 @@
 # scripts
 
-> Status: **planned.** One-command developer helpers.
+Operational helpers for the local demo.
 
-```text
-dev.ps1     compose up + migrate + seed, in one command
-check.ps1   run everything CI runs, locally, before you push
-```
+- `reset-demo.ps1` — clears mutable enrollment/progress state for the fictional demo
+  association by running the scoped `/resetdemo` command inside the API container.
+- `smoke_public_demo.py` — read-only post-deploy smoke checks (API readiness, landing page,
+  security headers, and the OIDC login redirect) for a configured recruiter deployment. It
+  creates nothing and mutates nothing.
