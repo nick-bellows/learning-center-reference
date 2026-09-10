@@ -27,6 +27,10 @@ Public configuration variables are listed in `.env.public.example`. A public dep
 (`WEB_DEPLOYMENT_ENV=public`) rejects demo auth, non-HTTPS URLs, a missing client secret, and
 the known local session-secret placeholder.
 
+`tests/screencast.spec.ts` is a recording aid, not a gate: it runs only with
+`PLAYWRIGHT_SCREENCAST=1` and is driven by `scripts/record-screencast.ps1` to produce the README
+walkthrough GIF.
+
 ## Run local checks
 
 ```sh
