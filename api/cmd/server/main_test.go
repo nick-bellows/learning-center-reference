@@ -3,25 +3,25 @@ package main
 import "testing"
 
 func TestValidateDeploymentConfig(t *testing.T) {
+	const tenant = "https://tenant.example.com"
 	tests := []struct {
-		name       string
-		deployment string
-		auth       string
-		database   string
-		issuer     string
-		wantError  bool
+		name      string
+		config    deploymentConfig
+		wantError bool
 	}{
-		{"local demo remains available", "local", "demo", "", "", false},
-		{"local HTTP OIDC fixture", "local", "oidc", "postgres://db", "http://oidc.localhost", false},
-		{"public OIDC", "public", "oidc", "postgres://db", "https://tenant.example.com", false},
-		{"unknown deployment", "staging", "oidc", "postgres://db", "https://tenant.example.com", true},
-		{"public demo rejected", "public", "demo", "postgres://db", "https://tenant.example.com", true},
-		{"public missing database", "public", "oidc", "", "https://tenant.example.com", true},
-		{"public HTTP issuer rejected", "public", "oidc", "postgres://db", "http://tenant.example.com", true},
+		{"local demo remains available", deploymentConfig{env: "local", authMode: "demo"}, false},
+		{"local HTTP OIDC fixture", deploymentConfig{env: "local", authMode: "oidc", databaseURL: "postgres://db", issuer: "http://oidc.localhost"}, false},
+		{"public OIDC with runtime role", deploymentConfig{env: "public", authMode: "oidc", databaseURL: "postgres://db", issuer: tenant, runtimeRole: "lcr_runtime"}, false},
+		{"public OIDC with runtime connection", deploymentConfig{env: "public", authMode: "oidc", databaseURL: "postgres://db", issuer: tenant, runtimeURL: "postgres://app@db"}, false},
+		{"unknown deployment", deploymentConfig{env: "staging", authMode: "oidc", databaseURL: "postgres://db", issuer: tenant, runtimeRole: "lcr_runtime"}, true},
+		{"public demo rejected", deploymentConfig{env: "public", authMode: "demo", databaseURL: "postgres://db", issuer: tenant, runtimeRole: "lcr_runtime"}, true},
+		{"public missing database", deploymentConfig{env: "public", authMode: "oidc", issuer: tenant, runtimeRole: "lcr_runtime"}, true},
+		{"public HTTP issuer rejected", deploymentConfig{env: "public", authMode: "oidc", databaseURL: "postgres://db", issuer: "http://tenant.example.com", runtimeRole: "lcr_runtime"}, true},
+		{"public owner-only database rejected", deploymentConfig{env: "public", authMode: "oidc", databaseURL: "postgres://db", issuer: tenant}, true},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			err := validateDeploymentConfig(test.deployment, test.auth, test.database, test.issuer)
+			err := validateDeploymentConfig(test.config)
 			if (err != nil) != test.wantError {
 				t.Fatalf("error = %v, wantError = %v", err, test.wantError)
 			}

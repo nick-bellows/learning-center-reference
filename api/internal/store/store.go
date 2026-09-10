@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"regexp"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -30,13 +31,58 @@ type Store struct {
 	pool *pgxpool.Pool
 }
 
-// New opens the PostgreSQL pool.
+// New opens the PostgreSQL pool with the privileges of the connection's login role.
 func New(ctx context.Context, databaseURL string) (*Store, error) {
-	pool, err := pgxpool.New(ctx, databaseURL)
+	return NewWithRole(ctx, databaseURL, "")
+}
+
+// roleNameRe restricts a runtime role to a plain SQL identifier, since SET ROLE cannot
+// take a bind parameter and the name comes from configuration.
+var roleNameRe = regexp.MustCompile(`^[a-z_][a-z0-9_]{0,62}$`)
+
+// NewWithRole opens the pool and, when role is non-empty, drops every connection to that
+// role with SET ROLE immediately after it connects. The login role in databaseURL keeps
+// its own privileges for setup work (migrations, seed) on a separate pool; this pool then
+// runs request handling with only the privileges granted to role (see migration 0007).
+// The role must already exist and the login role must be permitted to adopt it.
+func NewWithRole(ctx context.Context, databaseURL, role string) (*Store, error) {
+	config, err := pgxpool.ParseConfig(databaseURL)
+	if err != nil {
+		return nil, fmt.Errorf("parsing database url: %w", err)
+	}
+	if role != "" {
+		if !roleNameRe.MatchString(role) {
+			return nil, fmt.Errorf("invalid runtime role name %q", role)
+		}
+		setRole := `set role "` + role + `"`
+		config.AfterConnect = func(ctx context.Context, conn *pgx.Conn) error {
+			if _, err := conn.Exec(ctx, setRole); err != nil {
+				return fmt.Errorf("adopting runtime role %s: %w", role, err)
+			}
+			return nil
+		}
+	}
+	pool, err := pgxpool.NewWithConfig(ctx, config)
 	if err != nil {
 		return nil, fmt.Errorf("connecting to database: %w", err)
 	}
+	if role != "" {
+		// Fail at startup, not on the first request, if the role cannot be adopted.
+		if err := pool.Ping(ctx); err != nil {
+			pool.Close()
+			return nil, fmt.Errorf("connecting as runtime role %s: %w", role, err)
+		}
+	}
 	return &Store{pool: pool}, nil
+}
+
+// CurrentRole reports the role the pool's connections execute as, for startup logging.
+func (s *Store) CurrentRole(ctx context.Context) (string, error) {
+	var role string
+	if err := s.pool.QueryRow(ctx, `select current_user`).Scan(&role); err != nil {
+		return "", fmt.Errorf("reading current role: %w", err)
+	}
+	return role, nil
 }
 
 // Close releases the connection pool.
