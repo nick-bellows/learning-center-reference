@@ -98,7 +98,7 @@ projection with the append-only event log.
 | Go REST API and contract | `api/internal/httpapi`, semantically validated `api/openapi.yaml` |
 | Authentication and RBAC | OIDC verifier, Authorization Code + PKCE web session, local provider fixture, explicit demo adapter; roles resolved by `internal/store` |
 | Course workflow | Published catalog, idempotent enrollment, sequential lesson completion, learner dashboard |
-| PostgreSQL state | Five versioned migrations, embedded transactional runner, idempotent synthetic seed |
+| PostgreSQL state | Seven versioned migrations, embedded transactional runner, idempotent synthetic seed, DML-only runtime role (`0007`) |
 | Bounded event sourcing | Immutable completion events and transactional progress projection in migration `0005` |
 | Eligibility | Pure, boundary-tested Go rule derived from expiring facts and active holds |
 | Credentials contract v1 | Service-token `GET /v1/members/{subject}/credentials` implementing `learning-center.credentials.v1` (scope `credentials:read`); shape pinned by the consumer's fixtures under `api/testdata/contracts` |
@@ -151,6 +151,11 @@ drift detection and rebuild, the admin view, and all five rendered routes. See `
 - The OIDC verifier fails closed; unsupported or missing auth configuration cannot expose
   protected routes.
 - Ownership is checked before a learner can append progress to an enrollment.
+- Request handling runs as a DML-only database role (`lcr_runtime`, migration `0007`): it
+  cannot change the schema, read the migration ledger, or update/delete rows in the
+  append-only `progress_event` log. Migrations, the seed, and the operator commands run as
+  the owner. Public mode refuses to start without a runtime role or a separate runtime
+  connection string.
 - Logs record request metadata, never bearer tokens or member details.
 - UUIDs are validated before database casts. SQL uses pgx parameters throughout.
 - The public eligibility example contains fixed synthetic records only. A real deployment

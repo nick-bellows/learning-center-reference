@@ -28,6 +28,17 @@ go vet ./...
 DATABASE_URL="postgres://lcr:change-me-locally@localhost:5432/lcr?sslmode=disable" go test ./...
 ```
 
+Database privilege scopes: `DATABASE_URL` is the owner and is used only for migrations, the
+seed, and the operator commands (`/resetdemo`, `/reconcileprogress`). Request handling runs
+with the DML-only `lcr_runtime` role from migration `0007` when either knob is set:
+
+- `DB_RUNTIME_ROLE=lcr_runtime` — every pooled connection runs `SET ROLE` after connecting
+  (the Compose default; no second password to manage).
+- `RUNTIME_DATABASE_URL` — a separate login role created `IN ROLE lcr_runtime`, the shape
+  for a hosted database. Both paths are covered by `internal/store/runtime_role_test.go`.
+
+`DEPLOYMENT_ENV=public` refuses to start unless one of them is set.
+
 Protected routes fail closed unless `AUTH_MODE=demo` or `AUTH_MODE=oidc` is selected.
 OIDC mode additionally requires `OIDC_ISSUER_URL` and `OIDC_AUDIENCE`; provider discovery
 failure stops startup rather than downgrading authentication.

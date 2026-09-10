@@ -32,6 +32,9 @@ services:
       DATABASE_URL: ${DATABASE_URL:-postgres://lcr:change-me-locally@db:5432/lcr?sslmode=disable}
       MIGRATE_ON_START: "1"          # apply embedded migrations at startup
       SEED_FILE: /seed.sql           # local demo data (synthetic, idempotent)
+      # Request handling drops to the DML-only role from migration 0007 (SET ROLE per
+      # connection). Migrations and the seed above still run as the owner in DATABASE_URL.
+      DB_RUNTIME_ROLE: lcr_runtime
       # Explicit local-only auth adapter. Production uses AUTH_MODE=oidc and
       # validates issuer/audience/signature/expiry before resolving DB roles.
       AUTH_MODE: demo

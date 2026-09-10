@@ -4,6 +4,11 @@
 // embedded migrations (MIGRATE_ON_START=1), apply a seed file (SEED_FILE=
 // path, local demo only), then serve. The server carries explicit timeouts
 // and shuts down gracefully on SIGINT/SIGTERM.
+//
+// Two connection scopes: DATABASE_URL is the owner used for migrations and
+// seeding; request handling uses a least-privilege pool instead when
+// DB_RUNTIME_ROLE (SET ROLE per connection) or RUNTIME_DATABASE_URL (a
+// separate login) is set. Public deployments must set one of them.
 package main
 
 import (
@@ -36,9 +41,16 @@ func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	authMode := strings.ToLower(envOr("AUTH_MODE", "disabled"))
 	databaseURL := os.Getenv("DATABASE_URL")
-	if err := validateDeploymentConfig(
-		envOr("DEPLOYMENT_ENV", "local"), authMode, databaseURL, os.Getenv("OIDC_ISSUER_URL"),
-	); err != nil {
+	runtimeURL := os.Getenv("RUNTIME_DATABASE_URL")
+	runtimeRole := os.Getenv("DB_RUNTIME_ROLE")
+	if err := validateDeploymentConfig(deploymentConfig{
+		env:         envOr("DEPLOYMENT_ENV", "local"),
+		authMode:    authMode,
+		databaseURL: databaseURL,
+		issuer:      os.Getenv("OIDC_ISSUER_URL"),
+		runtimeURL:  runtimeURL,
+		runtimeRole: runtimeRole,
+	}); err != nil {
 		log.Fatalf("configuration: %v", err)
 	}
 	deps := httpapi.Deps{
@@ -47,14 +59,15 @@ func main() {
 		TrustProxy:         os.Getenv("TRUST_PROXY") == "1",
 	}
 	if databaseURL != "" {
-		st, err := store.New(ctx, databaseURL)
+		// Setup pool: the owner applies migrations and the seed, then is not used for requests.
+		setup, err := store.New(ctx, databaseURL)
 		if err != nil {
 			log.Fatalf("database: %v", err)
 		}
-		defer st.Close()
+		defer setup.Close()
 
 		if os.Getenv("MIGRATE_ON_START") == "1" {
-			applied, err := dbsetup.Migrate(ctx, st.Pool(), migrations.Files)
+			applied, err := dbsetup.Migrate(ctx, setup.Pool(), migrations.Files)
 			if err != nil {
 				log.Fatalf("migrate: %v", err)
 			}
@@ -65,11 +78,27 @@ func main() {
 			if err != nil {
 				log.Fatalf("seed: %v", err)
 			}
-			if err := dbsetup.ApplySeed(ctx, st.Pool(), string(sql)); err != nil {
+			if err := dbsetup.ApplySeed(ctx, setup.Pool(), string(sql)); err != nil {
 				log.Fatalf("seed: %v", err)
 			}
 			log.Printf("seed applied from %s", seedPath)
 		}
+
+		// Runtime pool: request handling runs with the restricted role's privileges when
+		// either knob is set; otherwise it is the owner pool (local default without them).
+		st := setup
+		if runtimeURL != "" || runtimeRole != "" {
+			st, err = store.NewWithRole(ctx, envOr("RUNTIME_DATABASE_URL", databaseURL), runtimeRole)
+			if err != nil {
+				log.Fatalf("runtime database: %v", err)
+			}
+			defer st.Close()
+		}
+		role, err := st.CurrentRole(ctx)
+		if err != nil {
+			log.Fatalf("runtime database: %v", err)
+		}
+		log.Printf("request handling runs as database role %q", role)
 
 		deps.Eligibility = st
 		deps.Identity = st
@@ -145,22 +174,30 @@ func configureAuth(ctx context.Context, authMode string) (verifier, error) {
 	}
 }
 
-func validateDeploymentConfig(deploymentEnv, authMode, databaseURL, issuer string) error {
-	if deploymentEnv != "local" && deploymentEnv != "public" {
-		return fmt.Errorf("DEPLOYMENT_ENV must be local or public, got %q", deploymentEnv)
+type deploymentConfig struct {
+	env, authMode, databaseURL, issuer string
+	runtimeURL, runtimeRole            string
+}
+
+func validateDeploymentConfig(c deploymentConfig) error {
+	if c.env != "local" && c.env != "public" {
+		return fmt.Errorf("DEPLOYMENT_ENV must be local or public, got %q", c.env)
 	}
-	if deploymentEnv != "public" {
+	if c.env != "public" {
 		return nil
 	}
-	if authMode != "oidc" {
+	if c.authMode != "oidc" {
 		return errors.New("public deployment requires AUTH_MODE=oidc")
 	}
-	if strings.TrimSpace(databaseURL) == "" {
+	if strings.TrimSpace(c.databaseURL) == "" {
 		return errors.New("public deployment requires DATABASE_URL")
 	}
-	parsed, err := url.Parse(issuer)
+	parsed, err := url.Parse(c.issuer)
 	if err != nil || parsed.Scheme != "https" || parsed.Host == "" {
 		return errors.New("public deployment requires an HTTPS OIDC_ISSUER_URL")
+	}
+	if strings.TrimSpace(c.runtimeURL) == "" && strings.TrimSpace(c.runtimeRole) == "" {
+		return errors.New("public deployment requires a least-privilege runtime database scope: set DB_RUNTIME_ROLE or RUNTIME_DATABASE_URL")
 	}
 	return nil
 }

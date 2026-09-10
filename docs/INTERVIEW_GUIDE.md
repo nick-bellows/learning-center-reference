@@ -169,6 +169,7 @@ authorization filters, indexes proven with query plans, and metrics around laten
 | Later lesson completed first | 409; no event written | UI already exposes only the next lesson |
 | Repeated enrollment/completion | Existing state returned | Add idempotency keys if mutations gain external side effects |
 | Credential expires overnight | Next read computes lapsed status | Scheduled notifications and operational dashboard |
+| Handler compromise or injection bug | Request handling runs as `lcr_runtime` (migration `0007`): no DDL, no access to `schema_migrations`, no update/delete on `progress_event`; both adoption paths are integration-tested | Separate login role per service, network policy, and audit logging on the owner role |
 | Projection corruption | `reconcileprogress` reports drift (exit 3) and `--apply` rebuilds `enrollment_progress` from `progress_event` in one locked transaction; CI corrupts and repairs it every run | Schedule the dry run as an operational check and alert on drift |
 
 ## Improvements with more time or external credentials

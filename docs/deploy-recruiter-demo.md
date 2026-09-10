@@ -33,7 +33,7 @@ single-use codes, and offers only two fixed fictional subjects.
 | --- | --- | --- |
 | Next.js web | platform with Node server support; root `web/` | variables in `web/.env.public.example` |
 | Go API | long-running container from `api/Dockerfile` | variables in `api/.env.public.example` |
-| PostgreSQL | managed PostgreSQL with required TLS | `DATABASE_URL`; synthetic seed only |
+| PostgreSQL | managed PostgreSQL with required TLS | `DATABASE_URL` (owner: migrations/seed) plus `DB_RUNTIME_ROLE=lcr_runtime` or a `RUNTIME_DATABASE_URL` login created `IN ROLE lcr_runtime` for request handling; synthetic seed only |
 | Identity | OIDC regular web application + API audience | callback and logout URLs; client credentials |
 
 No provider is part of the implementation claim until its actual URL passes the checks below.
