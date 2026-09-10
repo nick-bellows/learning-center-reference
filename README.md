@@ -151,6 +151,7 @@ drift detection and rebuild, the admin view, and all five rendered routes. See `
 - [Domain model and assumptions](docs/domain-model.md)
 - [Glossary of domain and technical terms](docs/glossary.md)
 - [Interview guide](docs/INTERVIEW_GUIDE.md)
+- [Manual accessibility review checklist](docs/accessibility-manual-review.md)
 
 ## Security and privacy boundaries
 
@@ -183,6 +184,8 @@ drift detection and rebuild, the admin view, and all five rendered routes. See `
   for an in-progress course would require a versioning policy.
 - Automated axe checks catch only a subset of accessibility issues; manual keyboard,
   screen-reader, zoom, and contrast review remains necessary before a WCAG conformance claim.
+  The checklist and findings log for that review is `docs/accessibility-manual-review.md`; it
+  has not been run yet.
 - The compliance query favors readable code over large-roster optimization and would need
   pagination and a set-based query at production scale.
 
