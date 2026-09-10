@@ -3,12 +3,30 @@ package demoreset
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 const DemoAssociationID = "00000000-0000-0000-0000-0000000000aa"
+
+// ConfirmValue is the exact RESET_CONFIRM value an operator must supply. The phrase
+// names what is being reset so the command cannot be run by habit against the wrong
+// database.
+const ConfirmValue = "synthetic-demo"
+
+// ErrNotConfirmed is returned when the confirmation phrase is missing or wrong.
+var ErrNotConfirmed = errors.New("refusing reset: set RESET_CONFIRM=" + ConfirmValue)
+
+// Confirm checks the operator's confirmation phrase. It is an exact, case-sensitive
+// match: no trimming, no aliases.
+func Confirm(value string) error {
+	if value != ConfirmValue {
+		return ErrNotConfirmed
+	}
+	return nil
+}
 
 // Reset deletes demo enrollments. Progress projections and events cascade from
 // enrollment; identities, roles, courses, credentials, and audit fixtures remain.

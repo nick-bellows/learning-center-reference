@@ -12,8 +12,8 @@ import (
 )
 
 func main() {
-	if os.Getenv("RESET_CONFIRM") != "synthetic-demo" {
-		log.Fatal("refusing reset: set RESET_CONFIRM=synthetic-demo")
+	if err := demoreset.Confirm(os.Getenv("RESET_CONFIRM")); err != nil {
+		log.Fatal(err)
 	}
 	if os.Getenv("DATABASE_URL") == "" {
 		log.Fatal("DATABASE_URL is required")
