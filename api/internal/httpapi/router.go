@@ -62,6 +62,8 @@ type Deps struct {
 	Logger             *slog.Logger
 	RateLimitPerMinute int
 	TrustProxy         bool
+	// MaxConcurrentRequests bounds in-flight requests; 0 selects the default (64).
+	MaxConcurrentRequests int
 }
 
 type memberContextKey struct{}
@@ -87,7 +89,11 @@ func NewRouter(deps Deps) http.Handler {
 	r.Use(middleware.Recoverer)
 	r.Use(securityHeaders)
 	r.Use(middleware.RequestSize(1 << 20))
-	r.Use(middleware.Throttle(64))
+	limit := deps.MaxConcurrentRequests
+	if limit <= 0 {
+		limit = defaultMaxConcurrentRequests
+	}
+	r.Use(concurrencyLimit(limit))
 	if deps.RateLimitPerMinute > 0 {
 		r.Use(newClientRateLimiter(deps.RateLimitPerMinute, time.Minute, deps.TrustProxy).middleware)
 	}
