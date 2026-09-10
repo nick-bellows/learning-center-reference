@@ -8,6 +8,10 @@ on:
 permissions:
   contents: read
 
+# Every third-party action is pinned to a full commit SHA (the version tag is kept as a
+# comment for readers and for Dependabot, which updates both). A tag can be moved to
+# different code; a SHA cannot. All pinned versions run on the Node 24 action runtime.
+
 jobs:
   api:
     runs-on: ubuntu-latest
@@ -33,8 +37,8 @@ jobs:
       # of skipping — the skip never hides a break in CI.
       DATABASE_URL: postgres://lcr:ci-only@localhost:5432/lcr?sslmode=disable
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: "1.26"
           cache-dependency-path: api/go.sum
@@ -53,8 +57,8 @@ jobs:
     env:
       NEXT_TELEMETRY_DISABLED: "1"
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: "22"
           cache: npm
@@ -68,7 +72,7 @@ jobs:
   e2e:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - run: docker compose up -d --build
       - name: wait for the API to be ready (health includes a DB ping)
         run: |
@@ -145,7 +149,7 @@ jobs:
         run: |
           docker compose exec -T -e RESET_CONFIRM=synthetic-demo api /resetdemo
           test "$(docker compose exec -T -e PGPASSWORD=change-me-locally db psql -U lcr -d lcr -tAc 'select count(*) from enrollment')" = "0"
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: "22"
           cache: npm
@@ -169,7 +173,7 @@ jobs:
   oidc-e2e:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: start local standards-based OIDC stack
         run: docker compose -f compose.yml -f compose.oidc.yml up -d --build
       - name: wait for API and web
@@ -179,7 +183,7 @@ jobs:
             sleep 2
           done
           echo "OIDC stack never became ready"; exit 1
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: "22"
           cache: npm
@@ -210,7 +214,7 @@ jobs:
   secret-scan:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
       - name: gitleaks (full history; fails the build on any finding)
