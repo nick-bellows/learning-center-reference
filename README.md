@@ -10,6 +10,11 @@
 > **Independent portfolio project — not affiliated with, endorsed by, or containing
 > data from U.S. Soccer or any member organization. Every name and record is fictional.**
 
+![Twenty-five-second walkthrough: the landing page, a learner signing in through the local OIDC fixture, enrolling and completing two lessons, being refused the administrator view, then the administrator roster with derived eligibility](docs/assets/recruiter-walkthrough.gif)
+
+*Recorded against the local Compose stack with the OIDC overlay by `scripts/record-screencast.ps1`;
+nothing is hosted. The still screenshots below show the same two views at full resolution.*
+
 This reference implementation models one hard product problem rather than a broad mock:
 education progress and participation eligibility have to remain traceable as roles,
 credentials, expirations, and holds change.
