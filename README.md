@@ -31,6 +31,10 @@ admin identity → PostgreSQL admin role → current credential facts
 - The default local stack uses an explicit demo verifier; the optional OIDC overlay exercises
   Authorization Code + PKCE, signed tokens, callback/session handling, and explicit role switching
   with two fixed fictional identities. Neither local mode is suitable for internet exposure.
+- The browser boundary is tested on its failure paths too: tampered, forged, expired, and
+  token-less session cookies; callbacks with no transaction, a mismatched state, a provider
+  `error=` response, a forged code, an expired transaction, or a replayed code; and hostile
+  `returnTo` values. Each ends signed out or on the generic error page (`web/tests/auth-negative.spec.ts`).
 - Enrollment and lesson-completion retries are idempotent.
 - Sequential courses reject an out-of-order completion with `409 Conflict`.
 - Every error, including throttling (`429`), internal failure (`500`), and unconfigured
@@ -98,7 +102,7 @@ projection with the append-only event log.
 | Capability | Evidence |
 | --- | --- |
 | Go REST API and contract | `api/internal/httpapi`; `api/openapi.yaml` is validated semantically and every handler status/body (including 429/500/503) is checked against it in `openapi_conformance_test.go` |
-| Authentication and RBAC | OIDC verifier, Authorization Code + PKCE web session, local provider fixture, explicit demo adapter; roles resolved by `internal/store` |
+| Authentication and RBAC | OIDC verifier, Authorization Code + PKCE web session, local provider fixture, explicit demo adapter; roles resolved by `internal/store`; browser happy path and 16 negative paths in `web/tests/auth*.spec.ts` |
 | Course workflow | Published catalog, idempotent enrollment, sequential lesson completion, learner dashboard |
 | PostgreSQL state | Seven versioned migrations, embedded transactional runner, idempotent synthetic seed, DML-only runtime role (`0007`) |
 | Bounded event sourcing | Immutable completion events and transactional progress projection in migration `0005` |

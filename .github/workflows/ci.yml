@@ -208,7 +208,7 @@ jobs:
         run: |
           npm ci
           npx playwright install --with-deps chromium
-      - name: exercise learner login, authorization denial, logout, and administrator login
+      - name: exercise learner/admin login, logout, and the negative paths (tampered, expired, forged, replayed, hostile returnTo)
         working-directory: web
         env:
           PLAYWRIGHT_BASE_URL: http://localhost:3000
