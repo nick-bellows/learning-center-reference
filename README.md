@@ -87,7 +87,9 @@ docker compose -f compose.yml -f compose.oidc.yml up --build
 
 Open `/learn`, sign in as Alex Coach, then sign out and choose Casey Admin for the administrator
 path. The guided landing page links each UI behavior to its implementation and tests. Run
-`./scripts/reset-demo.ps1` from PowerShell to clear mutable fictional enrollment/progress state.
+`./scripts/reset-demo.ps1` from PowerShell to clear mutable fictional enrollment/progress state,
+and `./scripts/reconcile-progress.ps1` (add `-Apply` to repair) to compare the dashboard
+projection with the append-only event log.
 
 ## What is implemented
 
@@ -102,7 +104,7 @@ path. The guided landing page links each UI behavior to its implementation and t
 | Credentials contract v1 | Service-token `GET /v1/members/{subject}/credentials` implementing `learning-center.credentials.v1` (scope `credentials:read`); shape pinned by the consumer's fixtures under `api/testdata/contracts` |
 | Administrator workflow | Role-protected compliance roster with current reasons and earliest credential expiry |
 | Web and accessibility | Next.js 16, TypeScript, semantic UI, keyboard focus/reduced motion, automated axe WCAG A/AA gate |
-| Operations | JSON request logs without tokens/PII, DB-aware health check, timeouts, graceful shutdown, request/body limits, scoped demo reset |
+| Operations | JSON request logs without tokens/PII, DB-aware health check, timeouts, graceful shutdown, request/body limits, scoped demo reset, projection drift check/rebuild (`/reconcileprogress`) |
 | Delivery | Non-root container images; GitHub Actions for vet/race/tests, real-Postgres integration, vulnerability checks, web build, Compose/OIDC e2e, and accessibility |
 
 ## Verification
@@ -128,8 +130,8 @@ PLAYWRIGHT_BASE_URL=http://localhost:3000 npm run test:a11y
 ```
 
 CI also starts the complete Compose stack and exercises authentication failures, role
-boundaries, enrollment retry behavior, ordered progress, dashboard persistence, the admin
-view, and all five rendered routes. See `.github/workflows/ci.yml`.
+boundaries, enrollment retry behavior, ordered progress, dashboard persistence, projection
+drift detection and rebuild, the admin view, and all five rendered routes. See `.github/workflows/ci.yml`.
 
 ## Engineering decisions
 

@@ -29,6 +29,7 @@ does not pretend that Auth0 or another hosted provider has been tested.
 | Role and ownership resolution | `api/internal/store/store.go` |
 | Progress transaction and idempotency | `Store.CompleteLesson` in `api/internal/store/store.go` |
 | Event/projection schema | `api/migrations/0005_progress.up.sql` |
+| Projection rebuild/reconcile | `api/internal/projection/reconcile.go` and `cmd/reconcileprogress` |
 | Eligibility rule and boundaries | `api/internal/safeguarding/eligibility.go` and its tests |
 | Service-to-service credentials contract | `api/internal/credentials`, `authenticateService` in `router.go`, fixtures under `api/testdata/contracts/learning-center.credentials.v1` |
 | API contract | `api/openapi.yaml` and `openapi_test.go` |
@@ -168,7 +169,7 @@ authorization filters, indexes proven with query plans, and metrics around laten
 | Later lesson completed first | 409; no event written | UI already exposes only the next lesson |
 | Repeated enrollment/completion | Existing state returned | Add idempotency keys if mutations gain external side effects |
 | Credential expires overnight | Next read computes lapsed status | Scheduled notifications and operational dashboard |
-| Projection corruption | No repair command yet | Rebuild projection from events and reconcile in CI/operations |
+| Projection corruption | `reconcileprogress` reports drift (exit 3) and `--apply` rebuilds `enrollment_progress` from `progress_event` in one locked transaction; CI corrupts and repairs it every run | Schedule the dry run as an operational check and alert on drift |
 
 ## Improvements with more time or external credentials
 
@@ -177,7 +178,7 @@ authorization filters, indexes proven with query plans, and metrics around laten
 3. Version published courses so lesson edits cannot silently change active enrollments.
 4. Add assessment attempts and passing rules, then issue an expiring credential whose state
    contributes to eligibility.
-5. Add projection rebuild/reconciliation tooling and operational metrics.
+5. Add operational metrics around the projection reconcile command (drift count, run duration).
 6. Run manual accessibility review and document findings before any conformance claim.
 7. Deploy only after a cost/security review; this repository currently proves local and CI
    behavior, not cloud operation.

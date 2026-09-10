@@ -133,6 +133,21 @@ jobs:
           echo "$COMPLETED" | jq -e '.recorded == true and .enrollment.percent_complete == 33'
           curl -sf -H "$LEARNER" "$API/v1/me/dashboard" | jq -e '.enrollments[0].completed_lessons == 1'
           curl -sf -H "$ADMIN" "$API/v1/admin/compliance" | jq -e '.members | length == 4'
+      - name: projection drift is detected and rebuilt from the event log
+        run: |
+          set -euo pipefail
+          PSQL='docker compose exec -T -e PGPASSWORD=change-me-locally db psql -U lcr -d lcr -tAc'
+          # Corrupt the read projection behind the store's back: the learner completed one
+          # lesson above, so the projection must disagree with progress_event afterwards.
+          $PSQL "update enrollment_progress set completed_lessons = 0, percent_complete = 0"
+          set +e
+          docker compose exec -T api /reconcileprogress > drift.json; DRY=$?
+          set -e
+          test "$DRY" = "3"
+          jq -e '.applied == false and (.drifted | length == 1) and .drifted[0].expected.completed_lessons == 1' drift.json
+          docker compose exec -T api /reconcileprogress --apply | jq -e '.applied == true and (.drifted | length == 1)'
+          docker compose exec -T api /reconcileprogress | jq -e '.drifted | length == 0'
+          test "$($PSQL 'select completed_lessons from enrollment_progress')" = "1"
       - name: web renders the live statuses
         run: |
           for i in $(seq 1 30); do
