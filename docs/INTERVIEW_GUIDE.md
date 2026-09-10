@@ -142,6 +142,8 @@ the route pattern instead.
 It runs axe WCAG 2.0/2.1 A and AA rules against all five rendered routes. It proves only that
 axe found no automatically detectable violations in that run. It does not prove full WCAG 2.1
 AA conformance; manual keyboard, screen-reader, zoom, and visual review are still required.
+The checklist for that review, with a findings log and environment record, is
+`docs/accessibility-manual-review.md`; it is a scaffold until a human pass is recorded.
 
 ### Why is the member eligibility example unauthenticated?
 
@@ -180,6 +182,7 @@ authorization filters, indexes proven with query plans, and metrics around laten
 4. Add assessment attempts and passing rules, then issue an expiring credential whose state
    contributes to eligibility.
 5. Add operational metrics around the projection reconcile command (drift count, run duration).
-6. Run manual accessibility review and document findings before any conformance claim.
+6. Run the manual accessibility review (`docs/accessibility-manual-review.md`) and record findings
+   there before any conformance claim.
 7. Deploy only after a cost/security review; this repository currently proves local and CI
    behavior, not cloud operation.
