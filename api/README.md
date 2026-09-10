@@ -14,6 +14,10 @@ Go/chi service over PostgreSQL via pgx.
   service-to-service route; eligibility and every validity flag come from `internal/safeguarding`.
 - `migrations/0005_progress.up.sql` contains the bounded append-only progress log and
   dashboard projection.
+- `internal/projection` and `cmd/reconcileprogress` compare that projection with the event
+  log and rebuild drifted rows (`--apply`); the dry run exits 3 when drift exists.
+- `internal/testdb` gives integration tests a private, migrated throwaway database so test
+  packages running in parallel never share rows.
 
 Run all tests, including real-PostgreSQL integration tests:
 
