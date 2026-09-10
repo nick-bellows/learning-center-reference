@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Learning Center Reference API
-  version: 0.4.0
+  version: 0.5.0
   description: >-
     Contract for an independent portfolio reference implementation using fictional
     soccer-federation data. It is not an official federation service.
@@ -27,6 +27,12 @@ paths:
                 $ref: "#/components/schemas/Health"
         "503":
           description: Database unavailable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Health"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
   /v1/members/{memberId}/eligibility:
     get:
       operationId: getMemberEligibility
@@ -45,6 +51,12 @@ paths:
           $ref: "#/components/responses/BadRequest"
         "404":
           $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
   /v1/members/{subject}/credentials:
     get:
       operationId: getMemberCredentials
@@ -89,6 +101,12 @@ paths:
           content:
             application/json:
               schema: {$ref: "#/components/schemas/Error"}
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
   /v1/courses:
     get:
       operationId: listCourses
@@ -113,6 +131,12 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "403":
           $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
   /v1/courses/{courseId}/enrollments:
     post:
       operationId: enrollInCourse
@@ -143,6 +167,12 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
   /v1/enrollments/{enrollmentId}/lessons/{lessonId}/complete:
     post:
       operationId: completeLesson
@@ -174,6 +204,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
   /v1/me/dashboard:
     get:
       operationId: getLearnerDashboard
@@ -192,6 +228,12 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "403":
           $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
   /v1/admin/compliance:
     get:
       operationId: listCompliance
@@ -216,6 +258,12 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "403":
           $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
 components:
   securitySchemes:
     bearerAuth:
@@ -278,6 +326,26 @@ components:
           schema: {$ref: "#/components/schemas/Error"}
     NotFound:
       description: Resource does not exist
+      content:
+        application/json:
+          schema: {$ref: "#/components/schemas/Error"}
+    TooManyRequests:
+      description: >-
+        Throttled. Either this client exceeded RATE_LIMIT_PER_MINUTE or the service is at
+        its concurrent-request limit. Retry-After gives the wait in seconds.
+      headers:
+        Retry-After:
+          schema: {type: integer, minimum: 1}
+      content:
+        application/json:
+          schema: {$ref: "#/components/schemas/Error"}
+    InternalError:
+      description: Unexpected failure; the body never carries details, the request log does (by request id)
+      content:
+        application/json:
+          schema: {$ref: "#/components/schemas/Error"}
+    ServiceUnavailable:
+      description: Authentication or the database is not configured; protected routes fail closed
       content:
         application/json:
           schema: {$ref: "#/components/schemas/Error"}

@@ -5,8 +5,10 @@ Go/chi service over PostgreSQL via pgx.
 - `cmd/server` wires the pool, embedded migrations, optional local seed, auth mode,
   structured request logger, timeouts, and graceful shutdown.
 - `internal/authn` verifies OIDC tokens or selects the explicit synthetic demo adapter.
-- `internal/httpapi` owns routes, identity/role middleware, status mapping, and the
-  semantically validated `openapi.yaml` contract.
+- `internal/httpapi` owns routes, identity/role middleware, status mapping, the JSON
+  concurrency limit, and the `openapi.yaml` contract: `openapi_test.go` validates the
+  document and `openapi_conformance_test.go` validates each handler's responses (every
+  status a route can emit, including 429/500/503) against it.
 - `internal/store` resolves database roles, executes the learning transaction, builds
   projections, and loads safeguarding inputs through parameterized SQL.
 - `internal/safeguarding` is a pure derived-eligibility rule with boundary tests.
