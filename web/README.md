@@ -17,8 +17,11 @@ Next.js App Router, TypeScript, and Tailwind front end for the implemented workf
   never receives the API base URL or the demo tokens.
 - `WEB_AUTH_MODE=oidc` runs the real Authorization Code + PKCE flow: the Next server owns an
   AES-GCM-encrypted, HttpOnly session and verifies the ID token's issuer, audience, and nonce.
-  This path is proven against the local OIDC fixture (`compose.oidc.yml`) and its browser test;
-  no hosted provider such as Auth0 has been configured or verified.
+  This path is proven against the local OIDC fixture (`compose.oidc.yml`) by two browser
+  suites: `tests/auth.spec.ts` (happy path) and `tests/auth-negative.spec.ts` (tampered, forged,
+  expired, and token-less sessions; mismatched state, provider `error=`, forged code, expired
+  transaction, and replayed callbacks; hostile `returnTo`). No hosted provider such as Auth0
+  has been configured or verified.
 
 Public configuration variables are listed in `.env.public.example`. A public deployment
 (`WEB_DEPLOYMENT_ENV=public`) rejects demo auth, non-HTTPS URLs, a missing client secret, and

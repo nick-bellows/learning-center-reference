@@ -35,6 +35,7 @@ does not pretend that Auth0 or another hosted provider has been tested.
 | API contract | `api/openapi.yaml` and `openapi_test.go` |
 | Learner interaction | `web/app/learn/page.tsx` and `actions.ts` |
 | Administrator interaction | `web/app/admin/compliance/page.tsx` |
+| Browser auth happy path and negative paths | `web/tests/auth.spec.ts`, `web/tests/auth-negative.spec.ts` (against the local OIDC fixture) |
 | Accessibility gate | `web/tests/accessibility.spec.ts` |
 | End-to-end proof | `.github/workflows/ci.yml` |
 
