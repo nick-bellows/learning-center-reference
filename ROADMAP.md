@@ -1,20 +1,20 @@
 # Roadmap
 
-Last verified: 2026-09-04
+Last verified: 2026-09-10
 
 ## Handoff snapshot
 
 | Field | Current state |
 | --- | --- |
-| Lifecycle | `ACTIVE` — portfolio-ready for review; product completion planned |
+| Lifecycle | `ACTIVE` — portfolio-ready for review; Lane A complete except the held issuance milestone (A2) |
 | Portfolio role | Primary software-engineering and soccer-domain evidence |
 | Public claim | Local Docker and CI-verified learner/admin workflow; no hosted deployment claim |
 | Data boundary | Fictional federation, identities, courses, credentials, and eligibility facts only |
 | License | MIT (`LICENSE`) |
-| CI | Five green jobs on `main`: `api`, `web`, `e2e`, `oidc-e2e`, `secret-scan` |
+| CI | Five green jobs on `main`: `api`, `web`, `e2e`, `oidc-e2e`, `secret-scan`; actions SHA-pinned on the Node 24 runtime |
 | External review | Two independent reviews (2026-09-04) returned **ADVANCE**; their in-scope findings are addressed |
-| Technical next step | Assessment-to-credential issuance (see Lane A) |
-| Presentation next step | Recruiter screencast (Lane A); hosted demo only after account/cost approval (Lane B) |
+| Technical next step | None scheduled. Assessment-to-credential issuance (A2) is **held** by decision B1 on 2026-09-10; say go to build it |
+| Presentation next step | Screencast shipped (README). Hosted demo only after account/cost approval (Lane B) |
 
 The implemented slice is meaningful: identity verification, database-backed roles, course
 listing, idempotent enrollment, ordered lesson completion, transactional progress
@@ -33,21 +33,22 @@ The project has two completion tiers. Tier 1 is done; Tier 2 is the remaining pl
   operational gaps (projection rebuild, least-privilege database role, negative-path web
   tests) are closed, and a resettable synthetic demo is optionally hosted.
 
-The two lanes below carry Tier 2. Lane A is executable now with no accounts, spending, or
-secrets. Lane B needs your decision, an account, a cost approval, or a repository setting.
+The two lanes below carry Tier 2. Lane A was executable with no accounts, spending, or
+secrets and was completed on 2026-09-10 (PRs #15–#23) except A2, which is held. Lane B needs
+your decision, an account, a cost approval, or a repository setting.
 
-## Lane A — Claude Code can execute now
+## Lane A — executed 2026-09-10
 
 Reversible code, docs, tests, and CI only. No external accounts, no spending, no secrets.
-Each item ships as its own PR with CI green before merge; you review the PR. Ordered by
-hiring value.
+Each item shipped as its own PR with CI green before merge. Ordered by hiring value.
 
-- [ ] **A1 · Recruiter screencast in the README (S–M).** Record the local OIDC learner →
+- [x] **A1 · Recruiter screencast in the README (S–M).** Record the local OIDC learner →
   admin journey and code tour, embed an optimized GIF/short clip in the README. Gives a
   recruiter the strongest part of the project without a hosted URL. Both external reviews
   named this the highest-value recruiter-access improvement. *(You review the recorded asset
   in the PR.)*
-- [ ] **A2 · Credential-issuance milestone (L, multi-day).** Implement the bounded workflow:
+  *Shipped in #23: `docs/assets/recruiter-walkthrough.gif` (25 s), recorded by `scripts/record-screencast.ps1` from `web/tests/screencast.spec.ts`.*
+- [ ] **A2 · Credential-issuance milestone (L, multi-day) — HELD by B1 (2026-09-10).** Implement the bounded workflow:
 
   ```text
   learner completes lessons -> assessment attempt -> passing result
@@ -59,36 +60,43 @@ hiring value.
   progress unless a new invariant justifies extending it. This turns the homepage's honest
   "next milestone" note into a demonstrated lifecycle and connects the two workflows.
   **Gated on decision B1** (scope/priority go-ahead) before the build starts.
-- [ ] **A3 · Projection rebuild/reconcile command (S–M).** Add a command that rebuilds
+- [x] **A3 · Projection rebuild/reconcile command (S–M).** Add a command that rebuilds
   `enrollment_progress` from `progress_event`, with a test, and reference it in the interview
   guide's projection-corruption row. Closes a named operational gap.
-- [ ] **A4 · Least-privilege database role (M).** Add a migration creating a restricted
+  *Shipped in #16: `internal/projection` + `/reconcileprogress` (dry run exits 3, `--apply` repairs); CI corrupts and repairs the projection every run.*
+- [x] **A4 · Least-privilege database role (M).** Add a migration creating a restricted
   runtime role (DML only); run migrations/seed as owner and runtime queries as the limited
   role via a second connection string. Addresses the single-owner-connection finding while
   staying local/synthetic.
-- [ ] **A5 · Negative-path browser auth tests (M).** Cover tampered/expired session cookies,
+  *Shipped in #19: migration `0007` creates DML-only `lcr_runtime`; `DB_RUNTIME_ROLE` (SET ROLE) or `RUNTIME_DATABASE_URL` (separate login); public mode requires one; both paths integration-tested.*
+- [x] **A5 · Negative-path browser auth tests (M).** Cover tampered/expired session cookies,
   callback state mismatch, provider `error=` responses, expired transactions, and hostile
   `returnTo`, against the local OIDC fixture. The custom session/callback code is currently
   proven only on the happy path.
-- [ ] **A6 · Operational-path unit tests (S–M).** Cover `dbsetup` (migration re-run
+  *Shipped in #21: `web/tests/auth-negative.spec.ts`, 16 cases in the `oidc-e2e` job.*
+- [x] **A6 · Operational-path unit tests (S–M).** Cover `dbsetup` (migration re-run
   idempotency and rollback-on-failure) and `demoreset`/`RESET_CONFIRM`. These paths are
   currently exercised only indirectly by the Compose e2e job.
-- [ ] **A7 · OpenAPI ↔ router conformance (M).** Assert handler responses against
+  *Shipped in #18: `dbsetup` (order, idempotency, rollback, concurrency) and `demoreset` (scope, `Confirm`) integration tests on private throwaway databases (`internal/testdb`).*
+- [x] **A7 · OpenAPI ↔ router conformance (M).** Assert handler responses against
   `openapi.yaml` (today `openapi_test.go` validates the document, not the handlers), document
   the `429/500/503` responses the API can emit, and make the concurrency throttle return JSON
   so every error shares one contract.
-- [ ] **A8 · CI action pinning (S).** SHA-pin the GitHub Actions and move off the Node 20
+  *Shipped in #20: `openapi_conformance_test.go` (45 cases + both 429 sources), 429/500/503 documented, JSON concurrency limit.*
+- [x] **A8 · CI action pinning (S).** SHA-pin the GitHub Actions and move off the Node 20
   action runtime to clear the deprecation warnings. Reproducible, supply-chain-clean CI.
-- [ ] **A9 · Manual-accessibility checklist scaffold (S).** Add the keyboard / screen-reader /
+  *Shipped in #15: checkout v7.0.1, setup-go v7.0.0, setup-node v7.0.0 by commit SHA (Node 24).*
+- [x] **A9 · Manual-accessibility checklist scaffold (S).** Add the keyboard / screen-reader /
   zoom / contrast checklist document so the human pass in B6 has a place to record findings.
   Automated axe is not a conformance claim.
+  *Shipped in #22: `docs/accessibility-manual-review.md` (route matrix, 31 checks, findings log).*
 
 ## Lane B — needs your input, approval, or account
 
-- [ ] **B1 · Decide whether to build the credential-issuance milestone now.** Scope/priority
-  call. It is the largest remaining engineering item (A2) and the centerpiece of "product
-  complete," but it is optional for a portfolio that already reviews as ADVANCE. Say go and
-  Claude Code builds it; say hold and the honest "next milestone" boundary stays.
+- [x] **B1 · Decide whether to build the credential-issuance milestone now.** Decided **hold**
+  on 2026-09-10: the honest "next milestone" boundary stays on the homepage and README. It
+  remains the largest remaining engineering item (A2) and can be started at any time by saying
+  go; nothing else in Lane A or B depends on it.
 - [ ] **B2 · Approve and provision a hosted recruiter demo.** Requires creating accounts,
   approving a small monthly ceiling, and supplying secrets — none of which Claude Code can do.
   Recommended shape is below. Once accounts and secrets exist, Claude Code can wire the
@@ -101,12 +109,15 @@ hiring value.
 - [ ] **B4 · Enable Dependabot security updates and vulnerability alerts (repository
   setting).** `.github/dependabot.yml` already turns on version updates; security updates and
   alerts are a free toggle in repository settings that only the owner can flip.
+  Eight Dependabot version-update PRs are open (#4, #7, #8, #10–#14); the majors (TypeScript 7,
+  Node 26 image and types, Go 1.27 image) need your judgment, the patch bumps can be merged once
+  their CI is green.
 - [ ] **B5 · Publish the demo link (only after B2/B3 pass).** Add the homepage/README live URL
   and, if desired, refresh the profile pin. Owner action and judgment; remove the link if the
   demo becomes slow, unsafe, or over budget.
 - [ ] **B6 · Run the manual accessibility review.** Keyboard, screen-reader, zoom, and
-  contrast testing is human work; do it (using the A9 checklist) before making any WCAG
-  conformance claim.
+  contrast testing is human work; do it using `docs/accessibility-manual-review.md` (A9) and
+  record findings there before making any WCAG conformance claim.
 - [ ] **B7 · Provision a headless CMS (deferred).** Only if editable course content becomes
   part of a slice. `content_ref` is the integration seam; do not provision for a keyword.
 
@@ -154,7 +165,8 @@ credential facts and derived eligibility; nothing is issued.
 
 ## Verification before changing status
 
-Use the commands in `README.md`. At minimum, verify Go vet/tests, real-Postgres integration,
-web lint/build, Compose end to end, axe automation, secret scan, and the post-deploy smoke
-path. Automated axe results are not a WCAG conformance claim; retain manual keyboard, zoom,
+Use the commands in `README.md`. At minimum, verify Go vet/tests, real-Postgres integration
+(including the runtime-role, projection, dbsetup, and reset tests), OpenAPI conformance, web
+lint/build, Compose end to end (including projection drift repair), the OIDC browser suites
+(happy and negative paths), axe automation, secret scan, and the post-deploy smoke path. Automated axe results are not a WCAG conformance claim; retain manual keyboard, zoom,
 contrast, and screen-reader notes separately (see B6).
