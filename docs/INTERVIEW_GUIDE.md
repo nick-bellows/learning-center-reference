@@ -32,7 +32,7 @@ does not pretend that Auth0 or another hosted provider has been tested.
 | Projection rebuild/reconcile | `api/internal/projection/reconcile.go` and `cmd/reconcileprogress` |
 | Eligibility rule and boundaries | `api/internal/safeguarding/eligibility.go` and its tests |
 | Service-to-service credentials contract | `api/internal/credentials`, `authenticateService` in `router.go`, fixtures under `api/testdata/contracts/learning-center.credentials.v1` |
-| API contract | `api/openapi.yaml` and `openapi_test.go` |
+| API contract | `api/openapi.yaml`; `openapi_test.go` validates the document, `openapi_conformance_test.go` validates every handler status and body against it |
 | Learner interaction | `web/app/learn/page.tsx` and `actions.ts` |
 | Administrator interaction | `web/app/admin/compliance/page.tsx` |
 | Browser auth happy path and negative paths | `web/tests/auth.spec.ts`, `web/tests/auth-negative.spec.ts` (against the local OIDC fixture) |
