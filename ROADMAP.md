@@ -1,6 +1,6 @@
 # Roadmap
 
-Last verified: 2026-09-10
+Last verified: 2026-09-12
 
 ## Handoff snapshot
 
@@ -11,8 +11,8 @@ Last verified: 2026-09-10
 | Public claim | Local Docker and CI-verified learner/admin workflow; no hosted deployment claim |
 | Data boundary | Fictional federation, identities, courses, credentials, and eligibility facts only |
 | License | MIT (`LICENSE`) |
-| CI | Five green jobs on `main`: `api`, `web`, `e2e`, `oidc-e2e`, `secret-scan`; actions SHA-pinned on the Node 24 runtime |
-| External review | Two independent reviews (2026-09-04) returned **ADVANCE**; their in-scope findings are addressed |
+| CI | Five green jobs on `main`: `api`, `web`, `e2e`, `oidc-e2e`, `secret-scan`; actions SHA-pinned on the Node 24 runtime. `oidc-e2e` also runs axe over the OIDC-only page states and a phone-width viewport |
+| External review | Two independent reviews (2026-09-04) returned **ADVANCE**; their in-scope findings are addressed. A closing code review on 2026-09-12 (API, web, docs) found no blocking defects; its fixes shipped in PRs #27–#30 |
 | Technical next step | None scheduled. Assessment-to-credential issuance (A2) is **held** by decision B1 on 2026-09-10; say go to build it |
 | Presentation next step | Screencast shipped (README). Hosted demo only after account/cost approval (Lane B) |
 
