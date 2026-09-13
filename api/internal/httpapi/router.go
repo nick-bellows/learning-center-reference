@@ -5,9 +5,11 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"regexp"
+	"runtime/debug"
 	"strings"
 	"time"
 
@@ -84,9 +86,10 @@ func NewRouter(deps Deps) http.Handler {
 	}
 
 	r := chi.NewRouter()
+	r.Use(ignoreInboundRequestID)
 	r.Use(middleware.RequestID)
 	r.Use(deps.requestLogger)
-	r.Use(middleware.Recoverer)
+	r.Use(deps.recoverer)
 	r.Use(securityHeaders)
 	r.Use(middleware.RequestSize(1 << 20))
 	limit := deps.MaxConcurrentRequests
@@ -97,6 +100,15 @@ func NewRouter(deps Deps) http.Handler {
 	if deps.RateLimitPerMinute > 0 {
 		r.Use(newClientRateLimiter(deps.RateLimitPerMinute, time.Minute, deps.TrustProxy).middleware)
 	}
+
+	// chi's defaults for an unmatched path or method answer in text/plain; every error this
+	// API emits is a JSON {"error": ...} body, including these.
+	r.NotFound(func(w http.ResponseWriter, _ *http.Request) {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "route not found"})
+	})
+	r.MethodNotAllowed(func(w http.ResponseWriter, _ *http.Request) {
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+	})
 
 	r.Get("/health", deps.handleHealth)
 	r.Get("/v1/members/{id}/eligibility", deps.handleEligibility)
@@ -129,6 +141,57 @@ func securityHeaders(next http.Handler) http.Handler {
 	})
 }
 
+// requestIDHeader carries the server-generated request id back to the caller so a client
+// can quote the exact log entry when reporting a 500.
+const requestIDHeader = "X-Request-Id"
+
+// ignoreInboundRequestID drops any client-supplied X-Request-Id so chi's RequestID
+// middleware always generates one. Trusting the inbound header would let any caller plant
+// arbitrary text in the request_id log field.
+func ignoreInboundRequestID(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		r.Header.Del(requestIDHeader)
+		next.ServeHTTP(w, r)
+	})
+}
+
+// recoverer turns a handler panic into the documented JSON 500 and a structured error log
+// entry, replacing chi's Recoverer (empty body, unstructured stack on stderr). A panic
+// after the response has started cannot be repaired, so it is only logged.
+func (deps Deps) recoverer(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		wrapped := middleware.NewWrapResponseWriter(w, r.ProtoMajor)
+		defer func() {
+			recovered := recover()
+			if recovered == nil {
+				return
+			}
+			if recovered == http.ErrAbortHandler { //nolint:errorlint // sentinel compared by identity, as net/http does
+				panic(recovered)
+			}
+			deps.Logger.ErrorContext(r.Context(), "handler panic",
+				"request_id", middleware.GetReqID(r.Context()),
+				"route", routePattern(r),
+				"panic", fmt.Sprint(recovered),
+				"stack", string(debug.Stack()),
+			)
+			if wrapped.Status() == 0 {
+				writeJSON(wrapped, http.StatusInternalServerError, map[string]string{"error": "internal error"})
+			}
+		}()
+		next.ServeHTTP(wrapped, r)
+	})
+}
+
+func routePattern(r *http.Request) string {
+	if rctx := chi.RouteContext(r.Context()); rctx != nil {
+		if pattern := rctx.RoutePattern(); pattern != "" {
+			return pattern
+		}
+	}
+	return "unmatched"
+}
+
 // requestLogger emits operational metadata without authorization headers or PII. It logs the
 // matched route pattern (e.g. "/v1/members/{subject}/credentials") rather than the raw path,
 // so an identity-provider subject or member UUID in the URL never reaches the logs.
@@ -136,15 +199,12 @@ func (deps Deps) requestLogger(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		started := time.Now()
 		wrapped := middleware.NewWrapResponseWriter(w, r.ProtoMajor)
+		w.Header().Set(requestIDHeader, middleware.GetReqID(r.Context()))
 		next.ServeHTTP(wrapped, r)
-		route := chi.RouteContext(r.Context()).RoutePattern()
-		if route == "" {
-			route = "unmatched"
-		}
 		deps.Logger.InfoContext(r.Context(), "http request",
 			"request_id", middleware.GetReqID(r.Context()),
 			"method", r.Method,
-			"route", route,
+			"route", routePattern(r),
 			"status", wrapped.Status(),
 			"duration_ms", time.Since(started).Milliseconds(),
 		)
@@ -164,6 +224,10 @@ func (deps Deps) authenticate(next http.Handler) http.Handler {
 				writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "authentication not configured"})
 				return
 			}
+			// The reason (expired, bad signature, JWKS unreachable, ...) never reaches the
+			// client, so log it: a provider outage would otherwise look like bad tokens.
+			deps.Logger.WarnContext(r.Context(), "bearer token rejected",
+				"request_id", middleware.GetReqID(r.Context()), "error", err)
 			writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "invalid bearer token"})
 			return
 		}
@@ -204,6 +268,8 @@ func (deps Deps) authenticateService(scope string) func(http.Handler) http.Handl
 					writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "authentication not configured"})
 					return
 				}
+				deps.Logger.WarnContext(r.Context(), "service token rejected",
+					"request_id", middleware.GetReqID(r.Context()), "error", err)
 				writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
 				return
 			}
@@ -398,6 +464,8 @@ func (deps Deps) writeStoreError(w http.ResponseWriter, r *http.Request, err err
 		writeJSON(w, http.StatusForbidden, map[string]string{"error": "forbidden"})
 	case errors.Is(err, store.ErrOutOfOrder):
 		writeJSON(w, http.StatusConflict, map[string]string{"error": "complete earlier lessons first"})
+	case errors.Is(err, store.ErrEnrollmentWithdrawn):
+		writeJSON(w, http.StatusConflict, map[string]string{"error": "enrollment is withdrawn"})
 	default:
 		deps.Logger.ErrorContext(r.Context(), "request failed",
 			"request_id", middleware.GetReqID(r.Context()), "error", err)

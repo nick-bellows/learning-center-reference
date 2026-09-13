@@ -1,10 +1,16 @@
 openapi: 3.1.0
 info:
   title: Learning Center Reference API
-  version: 0.5.0
+  version: 0.5.1
   description: >-
     Contract for an independent portfolio reference implementation using fictional
     soccer-federation data. It is not an official federation service.
+
+    Every error the service emits, including a 404 for an unknown path, a 405 for a
+    wrong method, and a 500 from a recovered handler panic, is a JSON body of the Error
+    schema. Each response carries a server-generated X-Request-Id header that matches
+    the request_id field of the corresponding structured log entry; inbound
+    X-Request-Id values are ignored.
 servers:
   - url: http://localhost:8080
     description: Local Docker demonstration
@@ -199,7 +205,9 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
         "409":
-          description: A sequential course has an unfinished earlier lesson
+          description: >-
+            The completion conflicts with the enrollment's state: a sequential course has
+            an unfinished earlier lesson, or the enrollment has been withdrawn
           content:
             application/json:
               schema:
@@ -340,7 +348,9 @@ components:
         application/json:
           schema: {$ref: "#/components/schemas/Error"}
     InternalError:
-      description: Unexpected failure; the body never carries details, the request log does (by request id)
+      description: >-
+        Unexpected failure. The body never carries details; the structured request log
+        entry whose request_id equals the response's X-Request-Id header does.
       content:
         application/json:
           schema: {$ref: "#/components/schemas/Error"}

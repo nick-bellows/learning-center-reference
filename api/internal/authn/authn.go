@@ -84,8 +84,13 @@ func (v *OIDCVerifier) Verify(ctx context.Context, rawToken string) (string, err
 // array. Both are accepted and merged; an unreadable scope claim fails closed.
 func (v *OIDCVerifier) VerifyClaims(ctx context.Context, rawToken string) (Claims, error) {
 	token, err := v.verifier.Verify(ctx, rawToken)
-	if err != nil || strings.TrimSpace(token.Subject) == "" {
-		return Claims{}, ErrInvalidCredential
+	if err != nil {
+		// Keep the sentinel for callers' errors.Is checks and the provider's reason (expired,
+		// bad signature, JWKS fetch failure) for the operator's log; neither carries the token.
+		return Claims{}, fmt.Errorf("%w: %v", ErrInvalidCredential, err)
+	}
+	if strings.TrimSpace(token.Subject) == "" {
+		return Claims{}, fmt.Errorf("%w: empty subject", ErrInvalidCredential)
 	}
 	var granted struct {
 		Scope scopeList `json:"scope"`
