@@ -19,7 +19,32 @@ Go/chi service over PostgreSQL via pgx.
 - `internal/projection` and `cmd/reconcileprogress` compare that projection with the event
   log and rebuild drifted rows (`--apply`); the dry run exits 3 when drift exists.
 - `internal/testdb` gives integration tests a private, migrated throwaway database so test
-  packages running in parallel never share rows.
+  packages running in parallel never share rows. Every integration test in this module uses
+  it, including the store's; the database named by `DATABASE_URL` is only the server they
+  create their copies on.
+- `cmd/oidcfixture` (image `Dockerfile.oidc`) is the local standards-based OpenID provider
+  behind `compose.oidc.yml`: Authorization Code + PKCE, signed tokens, discovery and JWKS,
+  two fixed fictional subjects. It is a test dependency, never an internet identity provider.
+- `migrations/*.down.sql` document how each migration is reversed. Nothing applies them
+  automatically: `embed.go` embeds only the `*.up.sql` files and the runner is forward-only.
+
+Error contract: every error response, including an unknown path (404), a wrong method
+(405), and a recovered handler panic (500), is a JSON `{"error": ...}` body. Each response
+carries a server-generated `X-Request-Id` that matches the `request_id` field of its
+structured log line; an inbound `X-Request-Id` is ignored so clients cannot plant text in
+the logs. Rejected bearer tokens are logged with the verifier's reason (never the token)
+so an identity-provider outage is distinguishable from bad credentials.
+
+Throttling knobs: `RATE_LIMIT_PER_MINUTE` (default 120; `0` disables the per-client
+limit) and `MAX_CONCURRENT_REQUESTS` (default 64; `0` selects the default). Both answer
+with a JSON 429 and `Retry-After`.
+
+`GET /v1/members/{id}/eligibility` is deliberately unauthenticated in this reference
+implementation: it is the fixed synthetic-member example the `/members` page renders, member
+ids are unguessable UUIDs, and it exposes only the derived status and its reason. The
+compliance roster, which lists members by name, is admin-only. A real deployment would put
+member-level eligibility behind organization-level authorization (see `README.md` at the
+repository root, "Security and privacy boundaries").
 
 Run all tests, including real-PostgreSQL integration tests:
 

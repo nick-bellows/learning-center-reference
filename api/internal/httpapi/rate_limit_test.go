@@ -12,8 +12,10 @@ func TestClientRateLimiterResetsAndSeparatesClients(t *testing.T) {
 	limiter := newClientRateLimiter(2, time.Minute, false)
 	limiter.now = func() time.Time { return now }
 
-	if !limiter.allow("192.0.2.1") || !limiter.allow("192.0.2.1") {
-		t.Fatal("first two requests should pass")
+	for i := 1; i <= 2; i++ {
+		if !limiter.allow("192.0.2.1") {
+			t.Fatalf("request %d should pass", i)
+		}
 	}
 	if limiter.allow("192.0.2.1") {
 		t.Fatal("third request should be rate limited")

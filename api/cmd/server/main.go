@@ -15,7 +15,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
 	"log/slog"
 	"net/http"
 	"net/url"
@@ -38,7 +37,12 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
+	// One structured JSON log stream for startup, requests, and shutdown alike.
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+	fatal := func(msg string, err error) {
+		logger.Error(msg, "error", err)
+		os.Exit(1)
+	}
 	authMode := strings.ToLower(envOr("AUTH_MODE", "disabled"))
 	databaseURL := os.Getenv("DATABASE_URL")
 	runtimeURL := os.Getenv("RUNTIME_DATABASE_URL")
@@ -51,54 +55,67 @@ func main() {
 		runtimeURL:  runtimeURL,
 		runtimeRole: runtimeRole,
 	}); err != nil {
-		log.Fatalf("configuration: %v", err)
+		fatal("configuration", err)
+	}
+	// RATE_LIMIT_PER_MINUTE=0 disables the per-client limit; MAX_CONCURRENT_REQUESTS=0
+	// selects the router's default.
+	rateLimit, err := envIntOr("RATE_LIMIT_PER_MINUTE", 120)
+	if err != nil {
+		fatal("configuration", err)
+	}
+	maxConcurrent, err := envIntOr("MAX_CONCURRENT_REQUESTS", 0)
+	if err != nil {
+		fatal("configuration", err)
 	}
 	deps := httpapi.Deps{
-		Logger:             logger,
-		RateLimitPerMinute: envIntOr("RATE_LIMIT_PER_MINUTE", 120),
-		TrustProxy:         os.Getenv("TRUST_PROXY") == "1",
+		Logger:                logger,
+		RateLimitPerMinute:    rateLimit,
+		TrustProxy:            os.Getenv("TRUST_PROXY") == "1",
+		MaxConcurrentRequests: maxConcurrent,
 	}
 	if databaseURL != "" {
 		// Setup pool: the owner applies migrations and the seed, then is not used for requests.
 		setup, err := store.New(ctx, databaseURL)
 		if err != nil {
-			log.Fatalf("database: %v", err)
+			fatal("database", err)
 		}
-		defer setup.Close()
 
 		if os.Getenv("MIGRATE_ON_START") == "1" {
 			applied, err := dbsetup.Migrate(ctx, setup.Pool(), migrations.Files)
 			if err != nil {
-				log.Fatalf("migrate: %v", err)
+				fatal("migrate", err)
 			}
-			log.Printf("migrations: %d applied", len(applied))
+			logger.Info("migrations applied", "count", len(applied))
 		}
 		if seedPath := os.Getenv("SEED_FILE"); seedPath != "" {
 			sql, err := os.ReadFile(seedPath)
 			if err != nil {
-				log.Fatalf("seed: %v", err)
+				fatal("seed", err)
 			}
 			if err := dbsetup.ApplySeed(ctx, setup.Pool(), string(sql)); err != nil {
-				log.Fatalf("seed: %v", err)
+				fatal("seed", err)
 			}
-			log.Printf("seed applied from %s", seedPath)
+			logger.Info("seed applied", "path", seedPath)
 		}
 
 		// Runtime pool: request handling runs with the restricted role's privileges when
 		// either knob is set; otherwise it is the owner pool (local default without them).
+		// Once the runtime pool exists the owner pool has no further job, so it is closed
+		// rather than left idle with schema-changing privileges for the process lifetime.
 		st := setup
 		if runtimeURL != "" || runtimeRole != "" {
 			st, err = store.NewWithRole(ctx, envOr("RUNTIME_DATABASE_URL", databaseURL), runtimeRole)
 			if err != nil {
-				log.Fatalf("runtime database: %v", err)
+				fatal("runtime database", err)
 			}
-			defer st.Close()
+			setup.Close()
 		}
+		defer st.Close()
 		role, err := st.CurrentRole(ctx)
 		if err != nil {
-			log.Fatalf("runtime database: %v", err)
+			fatal("runtime database", err)
 		}
-		log.Printf("request handling runs as database role %q", role)
+		logger.Info("request handling database role", "role", role)
 
 		deps.Eligibility = st
 		deps.Identity = st
@@ -106,12 +123,12 @@ func main() {
 		deps.Credentials = st
 		deps.DB = st
 	} else {
-		log.Println("DATABASE_URL not set; database-backed routes will be unavailable")
+		logger.Warn("DATABASE_URL not set; database-backed routes will be unavailable")
 	}
 
-	verifier, err := configureAuth(ctx, authMode)
+	verifier, err := configureAuth(ctx, logger, authMode)
 	if err != nil {
-		log.Fatalf("authentication: %v", err)
+		fatal("authentication", err)
 	}
 	deps.Auth = verifier
 	deps.ServiceAuth = verifier
@@ -127,20 +144,20 @@ func main() {
 
 	errCh := make(chan error, 1)
 	go func() {
-		log.Printf("Learning Center API listening on %s", srv.Addr)
+		logger.Info("Learning Center API listening", "addr", srv.Addr)
 		errCh <- srv.ListenAndServe()
 	}()
 
 	select {
 	case err := <-errCh:
-		log.Fatal(err)
+		fatal("serve", err)
 	case <-ctx.Done():
 		// Graceful shutdown: stop accepting, let in-flight requests finish.
-		log.Println("shutting down")
+		logger.Info("shutting down")
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 		if err := srv.Shutdown(shutdownCtx); err != nil && !errors.Is(err, context.DeadlineExceeded) {
-			log.Printf("shutdown: %v", err)
+			logger.Error("shutdown", "error", err)
 		}
 	}
 }
@@ -152,13 +169,13 @@ type verifier interface {
 	authn.ClaimsVerifier
 }
 
-func configureAuth(ctx context.Context, authMode string) (verifier, error) {
+func configureAuth(ctx context.Context, logger *slog.Logger, authMode string) (verifier, error) {
 	switch authMode {
 	case "disabled":
-		log.Println("AUTH_MODE=disabled; protected routes fail closed with 503")
+		logger.Warn("AUTH_MODE=disabled; protected routes fail closed with 503")
 		return authn.UnavailableVerifier{}, nil
 	case "demo":
-		log.Println("AUTH_MODE=demo; using synthetic local identities only")
+		logger.Warn("AUTH_MODE=demo; using synthetic local identities only")
 		return authn.DemoVerifier{
 			envOr("DEMO_LEARNER_TOKEN", "local-learner-token"): {Subject: "demo|learner"},
 			envOr("DEMO_ADMIN_TOKEN", "local-admin-token"):     {Subject: "demo|admin"},
@@ -210,14 +227,16 @@ func envOr(key, def string) string {
 	return def
 }
 
-func envIntOr(key string, def int) int {
+// envIntOr reads a non-negative integer setting; zero is meaningful to the callers (it
+// disables the rate limit or selects the default concurrency bound).
+func envIntOr(key string, def int) (int, error) {
 	value := os.Getenv(key)
 	if value == "" {
-		return def
+		return def, nil
 	}
 	parsed, err := strconv.Atoi(value)
-	if err != nil || parsed < 1 {
-		log.Fatalf("%s must be a positive integer", key)
+	if err != nil || parsed < 0 {
+		return 0, fmt.Errorf("%s must be a non-negative integer, got %q", key, value)
 	}
-	return parsed
+	return parsed, nil
 }

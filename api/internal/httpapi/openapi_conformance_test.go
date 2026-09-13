@@ -209,6 +209,8 @@ func TestHandlersConformToOpenAPI(t *testing.T) {
 		{"courses admin lacks learner role", "GET", "/v1/courses", "admin-token", healthy, 403},
 		{"courses store failure", "GET", "/v1/courses", "learner-token",
 			failing(func(s *stubStore) { s.courses = func() ([]learning.CourseSummary, error) { return nil, boom } }), 500},
+		{"courses handler panic", "GET", "/v1/courses", "learner-token",
+			failing(func(s *stubStore) { s.courses = func() ([]learning.CourseSummary, error) { panic("simulated bug") } }), 500},
 		{"courses auth unavailable", "GET", "/v1/courses", "learner-token", unconfigured, 503},
 		{"courses identity store failure", "GET", "/v1/courses", "learner-token",
 			failing(func(s *stubStore) {
@@ -248,6 +250,12 @@ func TestHandlersConformToOpenAPI(t *testing.T) {
 			failing(func(s *stubStore) {
 				s.complete = func(string, string, string) (learning.EnrollmentProgress, bool, error) {
 					return learning.EnrollmentProgress{}, false, store.ErrOutOfOrder
+				}
+			}), 409},
+		{"complete withdrawn enrollment", "POST", "/v1/enrollments/" + enrollmentID + "/lessons/" + lessonUUID + "/complete", "learner-token",
+			failing(func(s *stubStore) {
+				s.complete = func(string, string, string) (learning.EnrollmentProgress, bool, error) {
+					return learning.EnrollmentProgress{}, false, store.ErrEnrollmentWithdrawn
 				}
 			}), 409},
 		{"complete store failure", "POST", "/v1/enrollments/" + enrollmentID + "/lessons/" + lessonUUID + "/complete", "learner-token",

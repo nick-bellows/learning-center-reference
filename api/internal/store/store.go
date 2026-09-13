@@ -26,6 +26,10 @@ var ErrForbidden = errors.New("forbidden")
 // ErrOutOfOrder means a sequential course has an unfinished earlier lesson.
 var ErrOutOfOrder = errors.New("complete earlier lessons first")
 
+// ErrEnrollmentWithdrawn is returned when a completion targets a withdrawn enrollment.
+// Withdrawal is an explicit decision; a stray completion must not silently reactivate it.
+var ErrEnrollmentWithdrawn = errors.New("enrollment is withdrawn")
+
 // Store owns the application's PostgreSQL connection pool.
 type Store struct {
 	pool *pgxpool.Pool
@@ -206,17 +210,20 @@ func (s *Store) CompleteLesson(ctx context.Context, memberID, enrollmentID, less
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	var ownerID, courseID string
+	var ownerID, courseID, status string
 	if err := tx.QueryRow(ctx, `
-		select member_id::text, course_id::text
+		select member_id::text, course_id::text, status
 		from enrollment where id = $1::uuid for update`, enrollmentID).
-		Scan(&ownerID, &courseID); errors.Is(err, pgx.ErrNoRows) {
+		Scan(&ownerID, &courseID, &status); errors.Is(err, pgx.ErrNoRows) {
 		return learning.EnrollmentProgress{}, false, ErrNotFound
 	} else if err != nil {
 		return learning.EnrollmentProgress{}, false, fmt.Errorf("loading enrollment: %w", err)
 	}
 	if ownerID != memberID {
 		return learning.EnrollmentProgress{}, false, ErrForbidden
+	}
+	if status == "withdrawn" {
+		return learning.EnrollmentProgress{}, false, ErrEnrollmentWithdrawn
 	}
 
 	var ordering string
@@ -301,7 +308,7 @@ func (s *Store) CompleteLesson(ctx context.Context, memberID, enrollmentID, less
 		    else 'active'
 		end
 		from enrollment_progress ep
-		where e.id = ep.enrollment_id and e.id = $1::uuid`, enrollmentID); err != nil {
+		where e.id = ep.enrollment_id and e.id = $1::uuid and e.status <> 'withdrawn'`, enrollmentID); err != nil {
 		return learning.EnrollmentProgress{}, false, fmt.Errorf("updating enrollment status: %w", err)
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -375,12 +382,20 @@ func (s *Store) loadMemberByID(ctx context.Context, memberID string) (learning.M
 
 func (s *Store) loadEnrollmentProgress(ctx context.Context, memberID, enrollmentID string) (learning.EnrollmentProgress, error) {
 	var progress learning.EnrollmentProgress
+	// The projection row is a read model, not the source of truth. If it is missing (the
+	// drift case cmd/reconcileprogress repairs) the enrollment still exists, so report zero
+	// progress against the course's current lesson count rather than failing the dashboard.
 	err := s.pool.QueryRow(ctx, `
 		select e.id::text, c.id::text, c.title, e.status,
-		       ep.completed_lessons, ep.total_lessons, ep.percent_complete
+		       coalesce(ep.completed_lessons, 0),
+		       coalesce(ep.total_lessons, (
+		           select count(*)::int from lesson l
+		           join module m on m.id = l.module_id
+		           where m.course_id = c.id)),
+		       coalesce(ep.percent_complete, 0)
 		from enrollment e
 		join course c on c.id = e.course_id
-		join enrollment_progress ep on ep.enrollment_id = e.id
+		left join enrollment_progress ep on ep.enrollment_id = e.id
 		where e.id = $1::uuid and e.member_id = $2::uuid`, enrollmentID, memberID).
 		Scan(&progress.EnrollmentID, &progress.CourseID, &progress.CourseTitle, &progress.Status,
 			&progress.CompletedLessons, &progress.TotalLessons, &progress.PercentComplete)
@@ -498,16 +513,17 @@ func (s *Store) LoadSafeguardingInputs(ctx context.Context, memberID string) (sa
 
 	// Latest approved background-check expiry, and latest SafeSport expiry. Only records
 	// already in effect count: a future-dated approval/completion must not grant eligibility
-	// before it begins.
+	// before it begins. "Today" is the UTC date, the same clock safeguarding.Evaluate and
+	// credentials.Build use, so a non-UTC database session cannot make the two disagree.
 	if in.BackgroundCheckExpires, err = s.maxDate(ctx,
 		`select max(expires_at) from background_check
-		 where member_id = $1::uuid and status = 'approved' and approved_at <= current_date`,
+		 where member_id = $1::uuid and status = 'approved' and approved_at <= (now() at time zone 'utc')::date`,
 		memberID); err != nil {
 		return in, fmt.Errorf("background check: %w", err)
 	}
 	if in.SafeSportExpires, err = s.maxDate(ctx,
 		`select max(expires_at) from safesport_training
-		 where member_id = $1::uuid and completed_at <= current_date`,
+		 where member_id = $1::uuid and completed_at <= (now() at time zone 'utc')::date`,
 		memberID); err != nil {
 		return in, fmt.Errorf("safesport: %w", err)
 	}
@@ -543,7 +559,7 @@ func (s *Store) LoadSafeguardingInputs(ctx context.Context, memberID string) (sa
 		from member_role mr
 		left join role_credential rc
 		  on rc.member_id = mr.member_id and rc.role = mr.role
-		 and rc.issued_at <= current_date
+		 and rc.issued_at <= (now() at time zone 'utc')::date
 		where mr.member_id = $1::uuid and mr.role in ('coach','referee')
 		group by mr.role`,
 		memberID)

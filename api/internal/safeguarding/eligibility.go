@@ -30,7 +30,10 @@ type Inputs struct {
 	SafeSportExpires       *time.Time // nil = no SafeSport on file
 	BackgroundCheckExpires *time.Time // nil = no background check on file
 	ActiveHoldSources      []string   // e.g. ["safesport"]; empty = no active holds
-	GraceDays              int        // days after expiry still allowed (0 = flip exactly on expiry)
+	// GraceDays widens validity past the expiry date. Policy in this slice is zero: the store
+	// never sets it and no configuration exposes it, so credentials flip exactly on expiry.
+	// The parameter keeps the rule testable and leaves room for a documented grace policy.
+	GraceDays int
 
 	// A coaching license or referee recertification applies only when the member's role
 	// requires it.
