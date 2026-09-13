@@ -33,7 +33,14 @@ export async function GET(request: NextRequest) {
       prompt: "login",
     }).toString();
     return NextResponse.redirect(authorize);
-  } catch {
+  } catch (error) {
+    // The browser gets a generic page; the operator's log gets the reason (discovery failed,
+    // issuer mismatch, missing configuration). Messages from lib/oidc never carry a token.
+    console.error(JSON.stringify({ level: "error", msg: "oidc login unavailable", error: describe(error) }));
     return NextResponse.redirect(new URL("/auth/error?code=login_unavailable", request.url));
   }
+}
+
+function describe(error: unknown): string {
+  return error instanceof Error ? error.message : "unknown error";
 }

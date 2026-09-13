@@ -1,7 +1,8 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
 
-const pages = ["/", "/learn", "/admin/compliance", "/members", "/auth/error"];
+// The five routes plus the branded 404, which renders inside the same layout.
+const pages = ["/", "/learn", "/admin/compliance", "/members", "/auth/error", "/this-route-does-not-exist"];
 
 for (const path of pages) {
   test(`${path} has no automatically detectable WCAG A/AA violations`, async ({ page }) => {

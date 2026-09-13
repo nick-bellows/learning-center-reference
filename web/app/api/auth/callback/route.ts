@@ -31,7 +31,16 @@ export async function GET(request: NextRequest) {
       expiresAt: Math.floor(Date.now() / 1000) + lifetime,
     });
     return NextResponse.redirect(new URL(transaction.returnTo, config.appBaseUrl));
-  } catch {
+  } catch (error) {
+    // A misconfigured provider (issuer mismatch, unreachable JWKS, rejected client secret)
+    // would otherwise be invisible: only ?code=callback_rejected reaches the browser.
+    console.error(
+      JSON.stringify({
+        level: "error",
+        msg: "oidc callback rejected",
+        error: error instanceof Error ? error.message : "unknown error",
+      }),
+    );
     return failure();
   }
 }

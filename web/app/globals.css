@@ -83,3 +83,14 @@ td { border-bottom: 1px solid #e2e8f0; padding: 0.9rem 0.75rem; color: #52627a; 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; }
 }
+
+/* Horizontal scroll container for wide tables. It is focusable (tabIndex=0) so keyboard
+   users can reach and scroll it; the ring makes that focus visible. */
+.table-scroll {
+  overflow-x: auto;
+}
+.table-scroll:focus-visible {
+  outline: 3px solid #2457a7;
+  outline-offset: 2px;
+  border-radius: 0.5rem;
+}

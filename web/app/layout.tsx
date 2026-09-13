@@ -4,7 +4,8 @@ import { getViewerState } from "@/lib/api";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Learning Center Reference",
+  // Child pages set a short title that this template suffixes; the overview keeps the default.
+  title: { default: "Learning Center Reference", template: "%s | Learning Center Reference" },
   description:
     "A runnable soccer learning, progress, and participation-eligibility reference implementation.",
 };

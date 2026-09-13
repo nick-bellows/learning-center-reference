@@ -16,11 +16,13 @@ const TRANSACTION_COOKIE = "lcr_oidc_transaction";
 const SESSION_SECRET =
   process.env.SESSION_SECRET ?? "local-oidc-session-secret-change-before-public-deploy";
 
-// Mirrors web/lib/session.ts: AES-256-GCM under sha256(secret), iv.tag.ciphertext (base64url).
-function seal(value: object, secret = SESSION_SECRET): string {
+// Mirrors web/lib/session.ts: AES-256-GCM under sha256(secret), the cookie name as AAD,
+// iv.tag.ciphertext (base64url).
+function seal(value: object, cookieName: string, secret = SESSION_SECRET): string {
   const key = createHash("sha256").update(secret, "utf8").digest();
   const iv = randomBytes(12);
   const cipher = createCipheriv("aes-256-gcm", key, iv);
+  cipher.setAAD(Buffer.from(cookieName, "utf8"));
   const ciphertext = Buffer.concat([cipher.update(JSON.stringify(value), "utf8"), cipher.final()]);
   return [iv, cipher.getAuthTag(), ciphertext].map((part) => part.toString("base64url")).join(".");
 }
@@ -71,7 +73,7 @@ test.describe("session cookie", () => {
     await setCookie(
       context,
       SESSION_COOKIE,
-      seal({ accessToken: "forged", subject: "demo|admin", expiresAt: future }, "attacker-secret-of-at-least-32-chars"),
+      seal({ accessToken: "forged", subject: "demo|admin", expiresAt: future }, SESSION_COOKIE, "attacker-secret-of-at-least-32-chars"),
     );
     await expectSignedOut(page);
     await page.goto("/admin/compliance");
@@ -80,13 +82,24 @@ test.describe("session cookie", () => {
 
   test("an expired session is treated as signed out even though it is validly sealed", async ({ page, context }) => {
     const past = Math.floor(Date.now() / 1000) - 60;
-    await setCookie(context, SESSION_COOKIE, seal({ accessToken: "stale", subject: "demo|learner", expiresAt: past }));
+    await setCookie(context, SESSION_COOKIE, seal({ accessToken: "stale", subject: "demo|learner", expiresAt: past }, SESSION_COOKIE));
     await expectSignedOut(page);
   });
 
   test("a validly sealed session with a missing token is treated as signed out", async ({ page, context }) => {
     const future = Math.floor(Date.now() / 1000) + 600;
-    await setCookie(context, SESSION_COOKIE, seal({ subject: "demo|learner", expiresAt: future }));
+    await setCookie(context, SESSION_COOKIE, seal({ subject: "demo|learner", expiresAt: future }, SESSION_COOKIE));
+    await expectSignedOut(page);
+  });
+
+  test("a validly sealed transaction cookie cannot be presented as a session", async ({ page, context }) => {
+    // Same key, different cookie: the cookie name is authenticated data, so the seal fails to open.
+    const future = Math.floor(Date.now() / 1000) + 600;
+    await setCookie(
+      context,
+      SESSION_COOKIE,
+      seal({ accessToken: "smuggled", subject: "demo|admin", expiresAt: future }, TRANSACTION_COOKIE),
+    );
     await expectSignedOut(page);
   });
 
@@ -105,6 +118,22 @@ test.describe("session cookie", () => {
     expect(logoutByGet.status()).toBe(405);
     await page.goto("/learn");
     await expect(page.getByRole("heading", { name: /Welcome back, Alex Coach/ })).toBeVisible();
+
+    // Nor must a cross-site POST (an auto-submitted form on another site): the handler checks
+    // the Origin the browser attaches and refuses a foreign one before touching the cookie.
+    const logoutByForeignPost = await page.request.post("/api/auth/logout", {
+      headers: { origin: "https://evil.example" },
+      maxRedirects: 0,
+    });
+    expect(logoutByForeignPost.status()).toBe(403);
+    await page.goto("/learn");
+    await expect(page.getByRole("heading", { name: /Welcome back, Alex Coach/ })).toBeVisible();
+
+    // The same POST from our own origin is the real sign-out.
+    const logout = await page.request.post("/api/auth/logout", { headers: { origin: baseURL() }, maxRedirects: 0 });
+    expect(logout.status()).toBeGreaterThanOrEqual(300);
+    expect(logout.status()).toBeLessThan(400);
+    await expectSignedOut(page);
   });
 });
 
@@ -145,7 +174,10 @@ test.describe("callback", () => {
     await setCookie(
       context,
       TRANSACTION_COOKIE,
-      seal({ state, nonce: "n", verifier: "v".repeat(43), returnTo: "/learn", expiresAt: Math.floor(Date.now() / 1000) - 1 }),
+      seal(
+        { state, nonce: "n", verifier: "v".repeat(43), returnTo: "/learn", expiresAt: Math.floor(Date.now() / 1000) - 1 },
+        TRANSACTION_COOKIE,
+      ),
     );
     await page.goto(`/api/auth/callback?code=anything&state=${state}`);
     await expectRejectedCallback(page);

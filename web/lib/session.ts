@@ -26,9 +26,12 @@ function key(): Buffer {
   return createHash("sha256").update(getWebConfig().sessionSecret, "utf8").digest();
 }
 
-function seal(value: object): string {
+// The cookie name is authenticated as additional data, so a sealed transaction can never be
+// presented as a session (or the reverse) even though both use the same key.
+function seal(value: object, cookieName: string): string {
   const iv = randomBytes(12);
   const cipher = createCipheriv("aes-256-gcm", key(), iv);
+  cipher.setAAD(Buffer.from(cookieName, "utf8"));
   const ciphertext = Buffer.concat([
     cipher.update(JSON.stringify(value), "utf8"),
     cipher.final(),
@@ -36,12 +39,13 @@ function seal(value: object): string {
   return [iv, cipher.getAuthTag(), ciphertext].map((part) => part.toString("base64url")).join(".");
 }
 
-function open<T>(value: string | undefined): T | null {
+function open<T>(value: string | undefined, cookieName: string): T | null {
   if (!value) return null;
   try {
     const [iv, tag, ciphertext] = value.split(".").map((part) => Buffer.from(part, "base64url"));
     if (!iv || !tag || !ciphertext) return null;
     const decipher = createDecipheriv("aes-256-gcm", key(), iv);
+    decipher.setAAD(Buffer.from(cookieName, "utf8"));
     decipher.setAuthTag(tag);
     return JSON.parse(
       Buffer.concat([decipher.update(ciphertext), decipher.final()]).toString("utf8"),
@@ -63,11 +67,11 @@ function cookieOptions(maxAge: number) {
 
 export async function setSession(session: Session): Promise<void> {
   const maxAge = Math.max(1, Math.floor(session.expiresAt - Date.now() / 1000));
-  (await cookies()).set(SESSION_COOKIE, seal(session), cookieOptions(maxAge));
+  (await cookies()).set(SESSION_COOKIE, seal(session, SESSION_COOKIE), cookieOptions(maxAge));
 }
 
 export async function readSession(): Promise<Session | null> {
-  const session = open<Session>((await cookies()).get(SESSION_COOKIE)?.value);
+  const session = open<Session>((await cookies()).get(SESSION_COOKIE)?.value, SESSION_COOKIE);
   if (!session || !session.accessToken || !session.subject || session.expiresAt <= Date.now() / 1000) {
     return null;
   }
@@ -79,12 +83,12 @@ export async function clearSession(): Promise<void> {
 }
 
 export async function setTransaction(transaction: OIDCTransaction): Promise<void> {
-  (await cookies()).set(TRANSACTION_COOKIE, seal(transaction), cookieOptions(600));
+  (await cookies()).set(TRANSACTION_COOKIE, seal(transaction, TRANSACTION_COOKIE), cookieOptions(600));
 }
 
 export async function takeTransaction(): Promise<OIDCTransaction | null> {
   const store = await cookies();
-  const transaction = open<OIDCTransaction>(store.get(TRANSACTION_COOKIE)?.value);
+  const transaction = open<OIDCTransaction>(store.get(TRANSACTION_COOKIE)?.value, TRANSACTION_COOKIE);
   store.delete(TRANSACTION_COOKIE);
   if (!transaction || transaction.expiresAt <= Date.now() / 1000) return null;
   return transaction;

@@ -30,8 +30,25 @@ export function pkceChallenge(verifier: string): string {
   return createHash("sha256").update(verifier).digest("base64url");
 }
 
+// Discovery and the JWKS are per issuer, not per request: re-fetching them on every login
+// and callback cost two provider round-trips per sign-in and discarded jose's key cache.
+// The metadata is re-read after DISCOVERY_TTL_MS; the JWKS set refreshes itself on an
+// unknown key id.
+const DISCOVERY_TTL_MS = 10 * 60 * 1000;
+type ProviderCache = {
+  issuer: string;
+  metadata: ProviderMetadata;
+  jwks: ReturnType<typeof createRemoteJWKSet>;
+  fetchedAt: number;
+};
+let providerCache: ProviderCache | null = null;
+
 export async function providerMetadata(): Promise<ProviderMetadata> {
   const config = getWebConfig();
+  const cached = providerCache;
+  if (cached && cached.issuer === config.issuer && Date.now() - cached.fetchedAt < DISCOVERY_TTL_MS) {
+    return cached.metadata;
+  }
   const response = await fetch(`${config.issuer}/.well-known/openid-configuration`, {
     cache: "no-store",
     signal: AbortSignal.timeout(5_000),
@@ -46,7 +63,18 @@ export async function providerMetadata(): Promise<ProviderMetadata> {
   ]) {
     if (!endpoint) throw new Error("identity provider metadata is incomplete");
   }
+  providerCache = {
+    issuer: config.issuer,
+    metadata,
+    jwks: createRemoteJWKSet(new URL(metadata.jwks_uri)),
+    fetchedAt: Date.now(),
+  };
   return metadata;
+}
+
+function jwksFor(metadata: ProviderMetadata) {
+  if (providerCache && providerCache.metadata.jwks_uri === metadata.jwks_uri) return providerCache.jwks;
+  return createRemoteJWKSet(new URL(metadata.jwks_uri));
 }
 
 export async function exchangeCode(
@@ -94,9 +122,11 @@ export async function verifyIDToken(
   nonce: string,
 ): Promise<string> {
   const config = getWebConfig();
-  const result = await jwtVerify(rawToken, createRemoteJWKSet(new URL(metadata.jwks_uri)), {
+  // Only asymmetric signatures are acceptable for a token verified against a public JWKS.
+  const result = await jwtVerify(rawToken, jwksFor(metadata), {
     issuer: config.issuer,
     audience: config.clientId,
+    algorithms: ["RS256", "ES256", "PS256"],
   });
   if (!result.payload.sub || result.payload.nonce !== nonce) {
     throw new Error("identity token subject or nonce is invalid");

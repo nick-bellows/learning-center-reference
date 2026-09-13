@@ -8,7 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "test:a11y": "playwright test tests/accessibility.spec.ts",
-    "test:auth": "playwright test tests/auth.spec.ts tests/auth-negative.spec.ts"
+    "test:auth": "playwright test tests/auth.spec.ts tests/auth-negative.spec.ts tests/accessibility-oidc.spec.ts"
   },
   "dependencies": {
     "jose": "^6.2.10",
