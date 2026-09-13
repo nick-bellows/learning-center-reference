@@ -42,8 +42,10 @@ admin identity → PostgreSQL admin role → current credential facts
   `returnTo` values. Each ends signed out or on the generic error page (`web/tests/auth-negative.spec.ts`).
 - Enrollment and lesson-completion retries are idempotent.
 - Sequential courses reject an out-of-order completion with `409 Conflict`.
-- Every error, including throttling (`429`), internal failure (`500`), and unconfigured
-  dependencies (`503`), is a JSON `{"error": ...}` body documented in the OpenAPI contract.
+- Every error, including an unknown path (`404`), a wrong method (`405`), throttling (`429`),
+  a recovered handler panic (`500`), and unconfigured dependencies (`503`), is a JSON
+  `{"error": ...}` body documented in the OpenAPI contract, and every response carries a
+  server-generated `X-Request-Id` that matches its log line.
 - An append-only `progress_event` record and its `enrollment_progress` projection update
   in one transaction. Event sourcing is deliberately confined to learner progress.
 - Participation eligibility is never stored. It is recalculated from background-check,
@@ -142,7 +144,9 @@ PLAYWRIGHT_BASE_URL=http://localhost:3000 npm run test:a11y
 
 CI also starts the complete Compose stack and exercises authentication failures, role
 boundaries, enrollment retry behavior, ordered progress, dashboard persistence, projection
-drift detection and rebuild, the admin view, and all five rendered routes. See `.github/workflows/ci.yml`.
+drift detection and rebuild, the admin view, all five rendered routes plus the 404 page, and,
+under the OIDC overlay, the signed-out, refused, and error states at desktop and phone width.
+See `.github/workflows/ci.yml`.
 
 ## Engineering decisions
 
