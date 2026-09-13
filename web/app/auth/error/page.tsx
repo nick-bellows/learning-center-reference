@@ -1,3 +1,7 @@
+import type { Metadata } from "next";
+
+export const metadata: Metadata = { title: "Sign-in could not be completed" };
+
 export default function AuthenticationErrorPage() {
   return (
     <main className="page-shell">

@@ -1,4 +1,8 @@
+import type { Metadata } from "next";
+import { API_TIMEOUT_MS } from "@/lib/api";
 import { getWebConfig } from "@/lib/config";
+
+export const metadata: Metadata = { title: "Eligibility rules" };
 
 // The three fixed synthetic examples for the public, unauthenticated eligibility endpoint.
 // The authenticated administrator roster comes from /v1/admin/compliance instead.
@@ -18,6 +22,7 @@ async function fetchEligibility(id: string): Promise<Eligibility | null> {
   try {
     const res = await fetch(`${getWebConfig().apiBaseUrl}/v1/members/${id}/eligibility`, {
       cache: "no-store",
+      signal: AbortSignal.timeout(API_TIMEOUT_MS),
     });
     if (!res.ok) return null;
     return (await res.json()) as Eligibility;
@@ -46,11 +51,14 @@ export default async function MembersPage() {
         Eligibility is computed live from each member&rsquo;s safeguarding records.
       </p>
 
-      <section className="card mt-8 overflow-x-auto" aria-labelledby="examples-title">
+      <section className="card mt-8" aria-labelledby="examples-title">
         <div className="mb-5">
           <p className="eyebrow">Live rules evaluation</p>
           <h2 id="examples-title">Fixed synthetic examples</h2>
         </div>
+        {/* The table scrolls sideways on narrow screens; the wrapper is focusable so keyboard
+            users can reach and scroll it (axe: scrollable-region-focusable). */}
+        <div className="table-scroll" role="region" aria-labelledby="examples-title" tabIndex={0}>
         <table>
           <thead>
             <tr>
@@ -75,6 +83,7 @@ export default async function MembersPage() {
             ))}
           </tbody>
         </table>
+        </div>
       </section>
     </main>
   );

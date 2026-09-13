@@ -1,5 +1,8 @@
+import type { Metadata } from "next";
 import { completeLessonAction, enrollAction } from "./actions";
 import { APIRequestError, AuthenticationRequired, getCourses, getDashboard } from "@/lib/api";
+
+export const metadata: Metadata = { title: "Learner dashboard" };
 
 export default async function LearnPage() {
   let data;

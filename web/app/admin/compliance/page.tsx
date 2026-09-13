@@ -1,4 +1,7 @@
+import type { Metadata } from "next";
 import { APIRequestError, AuthenticationRequired, getCompliance } from "@/lib/api";
+
+export const metadata: Metadata = { title: "Participation compliance" };
 
 const dateFormatter = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
 
@@ -74,8 +77,10 @@ export default async function CompliancePage() {
         <div className="metric-card"><strong>{review}</strong><span>need attention</span></div>
       </div>
 
-      <section className="card overflow-x-auto" aria-labelledby="roster-title">
+      <section className="card" aria-labelledby="roster-title">
         <div className="mb-5"><p className="eyebrow">Live rules evaluation</p><h2 id="roster-title">Synthetic member roster</h2></div>
+        {/* Focusable scroll wrapper so keyboard users can reach a table wider than the viewport. */}
+        <div className="table-scroll" role="region" aria-labelledby="roster-title" tabIndex={0}>
         <table>
           <thead><tr><th>Member</th><th>Roles</th><th>Status</th><th>Earliest expiry</th><th>Reason</th></tr></thead>
           <tbody>
@@ -90,6 +95,7 @@ export default async function CompliancePage() {
             ))}
           </tbody>
         </table>
+        </div>
       </section>
     </main>
   );

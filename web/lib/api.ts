@@ -54,10 +54,16 @@ export type ComplianceMember = {
   next_expiration?: string;
 };
 
+// API_TIMEOUT_MS bounds every server-side call to the Go API. Without it a hung API (or a
+// black-holed API_BASE_URL) would hang every page render instead of reaching the
+// "service unavailable" branches the pages already have.
+export const API_TIMEOUT_MS = 5_000;
+
 async function apiRequest<T>(path: string, token: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${getWebConfig().apiBaseUrl}${path}`, {
     ...init,
     cache: "no-store",
+    signal: AbortSignal.timeout(API_TIMEOUT_MS),
     headers: {
       Authorization: `Bearer ${token}`,
       ...init?.headers,
@@ -81,18 +87,14 @@ async function accessToken(demoRole: "learner" | "admin"): Promise<string> {
   return session.accessToken;
 }
 
-export async function getViewerState(): Promise<{
-  authMode: "demo" | "oidc";
-  signedIn: boolean;
-  subject?: string;
-}> {
+export async function getViewerState(): Promise<{ authMode: "demo" | "oidc"; signedIn: boolean }> {
   // The header nav depends on request state (deployment auth mode and, in OIDC mode, the
   // session cookie), so it must never be baked into a static prerender. Without this, a
   // build with no auth env set freezes "local demo" into the landing and error pages.
   await connection();
   const config = getWebConfig();
   const session = config.authMode === "oidc" ? await readSession() : null;
-  return { authMode: config.authMode, signedIn: config.authMode === "demo" || Boolean(session), subject: session?.subject };
+  return { authMode: config.authMode, signedIn: config.authMode === "demo" || Boolean(session) };
 }
 
 export async function getCourses(): Promise<Course[]> {
