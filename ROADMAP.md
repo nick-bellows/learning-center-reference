@@ -1,8 +1,10 @@
 # Roadmap
 
-Last verified: 2026-09-12
+Last verified: 2026-09-15
 
-## Handoff snapshot
+2026-09-15: wording pass and Pages tour; no lifecycle change.
+
+## Status snapshot
 
 | Field | Current state |
 | --- | --- |
@@ -13,13 +15,15 @@ Last verified: 2026-09-12
 | License | MIT (`LICENSE`) |
 | CI | Five green jobs on `main`: `api`, `web`, `e2e`, `oidc-e2e`, `secret-scan`; actions SHA-pinned on the Node 24 runtime. `oidc-e2e` also runs axe over the OIDC-only page states and a phone-width viewport |
 | External review | Two independent reviews (2026-09-04) returned **ADVANCE**; their in-scope findings are addressed. A closing code review on 2026-09-12 (API, web, docs) found no blocking defects; its fixes shipped in PRs #27–#30 |
-| Technical next step | None scheduled. Assessment-to-credential issuance (A2) is **held** by decision B1 on 2026-09-10; say go to build it |
-| Presentation next step | Screencast shipped (README). Hosted demo only after account/cost approval (Lane B) |
+| Technical next step | None scheduled. Assessment-to-credential issuance (A2) is **held** by decision B1 on 2026-09-10; it starts when the maintainer lifts the hold |
+| Presentation next step | Screencast shipped (README); static GitHub Pages tour added 2026-09-15 (`docs/index.html`, deployed by `.github/workflows/site.yml`). Hosted runtime demo only after an account and a cost approval (Lane B) |
 
 The implemented slice is meaningful: identity verification, database-backed roles, course
 listing, idempotent enrollment, ordered lesson completion, transactional progress
 events/projection, learner dashboard, administrator compliance view, a service-to-service
 credentials contract, effective-date-correct eligibility, and route-pattern request logging.
+The project was built by the author with Claude Code; `docs/ai-assisted-development.md` records
+the division of labour and the evidence behind each claim.
 Read `README.md` and `docs/INTERVIEW_GUIDE.md` before changing scope.
 
 ## What "complete" means
@@ -34,8 +38,8 @@ The project has two completion tiers. Tier 1 is done; Tier 2 is the remaining pl
   tests) are closed, and a resettable synthetic demo is optionally hosted.
 
 The two lanes below carry Tier 2. Lane A was executable with no accounts, spending, or
-secrets and was completed on 2026-09-10 (PRs #15–#23) except A2, which is held. Lane B needs
-your decision, an account, a cost approval, or a repository setting.
+secrets and was completed on 2026-09-10 (PRs #15–#23) except A2, which is held. Lane B holds
+the open items that need an account, a cost approval, or a repository setting.
 
 ## Lane A — executed 2026-09-10
 
@@ -45,8 +49,8 @@ Each item shipped as its own PR with CI green before merge. Ordered by hiring va
 - [x] **A1 · Recruiter screencast in the README (S–M).** Record the local OIDC learner →
   admin journey and code tour, embed an optimized GIF/short clip in the README. Gives a
   recruiter the strongest part of the project without a hosted URL. Both external reviews
-  named this the highest-value recruiter-access improvement. *(You review the recorded asset
-  in the PR.)*
+  named this the highest-value recruiter-access improvement. *(The recorded asset was reviewed
+  by the maintainer in the PR.)*
   *Shipped in #23: `docs/assets/recruiter-walkthrough.gif` (25 s), recorded by `scripts/record-screencast.ps1` from `web/tests/screencast.spec.ts`.*
 - [ ] **A2 · Credential-issuance milestone (L, multi-day) — HELD by B1 (2026-09-10).** Implement the bounded workflow:
 
@@ -91,33 +95,37 @@ Each item shipped as its own PR with CI green before merge. Ordered by hiring va
   Automated axe is not a conformance claim.
   *Shipped in #22: `docs/accessibility-manual-review.md` (route matrix, 31 checks, findings log).*
 
-## Lane B — needs your input, approval, or account
+## Lane B — open items that need an account, cost approval, or repository setting
 
 - [x] **B1 · Decide whether to build the credential-issuance milestone now.** Decided **hold**
   on 2026-09-10: the honest "next milestone" boundary stays on the homepage and README. It
-  remains the largest remaining engineering item (A2) and can be started at any time by saying
-  go; nothing else in Lane A or B depends on it.
-- [ ] **B2 · Approve and provision a hosted recruiter demo.** Requires creating accounts,
-  approving a small monthly ceiling, and supplying secrets — none of which Claude Code can do.
-  Recommended shape is below. Once accounts and secrets exist, Claude Code can wire the
-  deployment config and run the smoke checks; it cannot create accounts, enable billing, or
-  hold secrets. Runbook: `docs/deploy-recruiter-demo.md`.
+  remains the largest remaining engineering item (A2) and can be started at any time once the
+  maintainer lifts the hold; nothing else in Lane A or B depends on it.
+- [ ] **B2 · Approve and provision a hosted recruiter demo.** Open; needs an account and a
+  cost approval. Requires creating accounts, approving a small monthly ceiling, and supplying
+  secrets. Recommended shape is below. Once accounts and secrets exist, the deployment config
+  and smoke checks follow the runbook: `docs/deploy-recruiter-demo.md`. The static GitHub
+  Pages tour (2026-09-15) does not close this item; it hosts screenshots, not the application.
 - [ ] **B3 · Create a hosted OIDC tenant (e.g. Auth0 Free) and verify the browser flow
   against it.** The redirect/callback/session/logout path is proven only against the local
   fixture today; hosted-provider interoperability stays unclaimed until a real tenant is
-  configured and its negative and end-to-end tests pass. Needs an external account.
+  configured and its negative and end-to-end tests pass. Open; needs an external account.
 - [ ] **B4 · Enable Dependabot security updates and vulnerability alerts (repository
-  setting).** `.github/dependabot.yml` already turns on version updates; security updates and
-  alerts are a free toggle in repository settings that only the owner can flip.
+  setting).** Open; needs a repository setting. `.github/dependabot.yml` already turns on
+  version updates; security updates and alerts are a free toggle in repository settings.
   Eight Dependabot version-update PRs are open (#4, #7, #8, #10–#14); the majors (TypeScript 7,
-  Node 26 image and types, Go 1.27 image) need your judgment, the patch bumps can be merged once
-  their CI is green.
+  Node 26 image and types, Go 1.27 image) need the maintainer's judgment, the patch bumps can be
+  merged once their CI is green.
 - [ ] **B5 · Publish the demo link (only after B2/B3 pass).** Add the homepage/README live URL
-  and, if desired, refresh the profile pin. Owner action and judgment; remove the link if the
-  demo becomes slow, unsafe, or over budget.
+  and, if desired, refresh the profile pin. Maintainer action and judgment; remove the link if
+  the demo becomes slow, unsafe, or over budget. Since 2026-09-15 a static GitHub Pages tour
+  (`docs/index.html`: the walkthrough GIF, the two screenshots, and links into the code) is
+  published and linked from `README.md`; it is not a running instance, so a hosted runtime
+  demo remains open.
 - [ ] **B6 · Run the manual accessibility review.** Keyboard, screen-reader, zoom, and
-  contrast testing is human work; do it using `docs/accessibility-manual-review.md` (A9) and
-  record findings there before making any WCAG conformance claim.
+  contrast testing is human work; the maintainer performs it using
+  `docs/accessibility-manual-review.md` (A9) and records findings there before making any WCAG
+  conformance claim.
 - [ ] **B7 · Provision a headless CMS (deferred).** Only if editable course content becomes
   part of a slice. `content_ref` is the integration seam; do not provision for a keyword.
 
