@@ -1,5 +1,7 @@
 # Learning Center Reference
 
+**Tour:** https://nick-bellows.github.io/learning-center-reference/ · static walkthrough with screenshots; the application itself is not hosted.
+
 > **Status: working portfolio vertical slice.** A synthetic learner can authenticate,
 > resolve a database role, browse a course, enroll, complete ordered lessons, and see
 > persisted progress. A synthetic administrator can inspect eligibility derived live

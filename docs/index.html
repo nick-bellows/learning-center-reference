@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Learning Center Reference</title>
+<meta name="description" content="Static tour of a Go + Next.js + PostgreSQL + OIDC learner/admin reference implementation for a fictional soccer federation. The application itself is not hosted.">
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #fbfaf7; --fg: #1f1f1d; --muted: #5b5a55; --line: #dcd9d1; --card: #ffffff;
+    --link: #0b57a4; --accent: #0f6b3f;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #161615; --fg: #ebe9e3; --muted: #a8a59c; --line: #33322f; --card: #1f1f1d; --link: #7fb6ee; --accent: #6fcf97; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+  main { max-width: 56rem; margin: 0 auto; padding: 2rem 1rem 3rem; }
+  h1 { font-size: 2rem; line-height: 1.2; margin: 0 0 .25rem; }
+  h2 { font-size: 1.25rem; margin: 2.25rem 0 .75rem; border-bottom: 1px solid var(--line); padding-bottom: .25rem; }
+  p, li { max-width: 46rem; }
+  a { color: var(--link); }
+  .lede { color: var(--muted); margin: 0 0 1rem; }
+  .note { border-left: 4px solid var(--accent); padding: .5rem .9rem; background: var(--card); border-radius: 0 .4rem .4rem 0; }
+  figure { margin: 1.25rem 0; }
+  figure img { display: block; width: 100%; height: auto; border: 1px solid var(--line); border-radius: .4rem; background: var(--card); }
+  figcaption { font-size: .9rem; color: var(--muted); margin-top: .4rem; }
+  code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .92em; background: var(--card); border: 1px solid var(--line); border-radius: .25rem; padding: 0 .3em; }
+  ul { padding-left: 1.25rem; }
+  li { margin: .35rem 0; }
+  footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid var(--line); font-size: .9rem; color: var(--muted); }
+  @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+</style>
+</head>
+<body>
+<main>
+  <h1>Learning Center Reference</h1>
+  <p class="lede">A static tour with screenshots. The application itself is not hosted;
+    the repository is <a href="https://github.com/nick-bellows/learning-center-reference">nick-bellows/learning-center-reference</a>.</p>
+
+  <p>A reference implementation of one hard product problem: education progress and participation
+    eligibility have to remain traceable as roles, credentials, expirations, and holds change.
+    A Go API, a Next.js front end, PostgreSQL, and an OIDC boundary carry a learner workflow
+    (authenticate, resolve a database role, browse a course, enroll, complete ordered lessons, see
+    persisted progress) and an administrator workflow (inspect eligibility derived live from
+    safeguarding and credential records). Roles come from PostgreSQL, not token claims; eligibility
+    is never stored, only recalculated.</p>
+
+  <p class="note"><strong>Independent portfolio project.</strong> Not affiliated with, endorsed by, or
+    containing data from U.S. Soccer or any member organization. The federation is fictional and
+    every name and record is synthetic.</p>
+
+  <h2>Walkthrough</h2>
+  <figure>
+    <img src="assets/recruiter-walkthrough.gif" width="960" height="540"
+      alt="Twenty-five-second walkthrough: the landing page, a learner signing in through the local OIDC fixture, enrolling and completing two lessons, being refused the administrator view, then the administrator roster with derived eligibility">
+    <figcaption>Twenty-five-second walkthrough: the landing page, a learner signing in through the local OIDC
+      fixture, enrolling and completing two lessons, being refused the administrator view, then the
+      administrator roster with derived eligibility. Recorded against the local Compose stack with the OIDC
+      overlay by <code>scripts/record-screencast.ps1</code>; nothing is hosted.</figcaption>
+  </figure>
+  <figure>
+    <img src="assets/learner-dashboard.png" width="1568" height="700" alt="Learner dashboard showing persisted course progress">
+    <figcaption>Learner dashboard showing persisted course progress.</figcaption>
+  </figure>
+  <figure>
+    <img src="assets/admin-compliance.png" width="1568" height="700" alt="Administrator compliance view with fictional members">
+    <figcaption>Administrator compliance view with fictional members.</figcaption>
+  </figure>
+
+  <h2>What is verified</h2>
+  <ul>
+    <li>API unit and integration tests run with <code>go vet</code> and <code>go test</code>; the integration
+      tests require the local PostgreSQL database.</li>
+    <li>Web checks: lint, build, and automated axe WCAG A/AA tests (<code>npm run test:a11y</code>).</li>
+    <li>CI (five jobs: <code>api</code>, <code>web</code>, <code>e2e</code>, <code>oidc-e2e</code>,
+      <code>secret-scan</code>) starts the complete Compose stack and exercises authentication failures,
+      role boundaries, enrollment retry behavior, ordered progress, dashboard persistence, projection drift
+      detection and rebuild, the admin view, all five rendered routes plus the 404 page, and, under the OIDC
+      overlay, the signed-out, refused, and error states at desktop and phone width.</li>
+    <li>The browser OIDC boundary is tested on its failure paths: a happy path and 16 negative paths
+      (tampered, forged, expired, and token-less session cookies; bad callbacks; replayed codes; hostile
+      <code>returnTo</code> values) in <code>web/tests/auth*.spec.ts</code>.</li>
+    <li>Every handler status and body, including <code>429</code>, <code>500</code>, and <code>503</code>,
+      is checked against <code>api/openapi.yaml</code> in <code>openapi_conformance_test.go</code>.</li>
+    <li>Automated axe checks catch only a subset of accessibility issues; a manual review remains
+      necessary before any WCAG conformance claim, and it has not been run yet.</li>
+  </ul>
+
+  <h2>Read the code</h2>
+  <ul>
+    <li><a href="https://github.com/nick-bellows/learning-center-reference#readme">README</a>: claims, quick start, verification commands, and limitations</li>
+    <li><a href="https://github.com/nick-bellows/learning-center-reference/tree/main/api">api/</a>: Go service, OpenAPI contract, OIDC adapter, domain/store code, migrations</li>
+    <li><a href="https://github.com/nick-bellows/learning-center-reference/tree/main/web">web/</a>: Next.js/TypeScript learner and administrator experiences, Playwright and axe tests</li>
+    <li><a href="https://github.com/nick-bellows/learning-center-reference/tree/main/docs/decisions">docs/decisions</a>: architecture decision records</li>
+    <li><a href="https://github.com/nick-bellows/learning-center-reference/blob/main/ROADMAP.md">ROADMAP</a>: status snapshot, completed and open items, stop conditions</li>
+  </ul>
+
+  <footer>Built by the author with Claude Code; see
+    <a href="https://github.com/nick-bellows/learning-center-reference/blob/main/docs/ai-assisted-development.md">docs/ai-assisted-development.md</a>.
+    Code is MIT licensed; the data, names, and records are fictional and synthetic.</footer>
+</main>
+</body>
+</html>
