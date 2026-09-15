@@ -161,6 +161,7 @@ See `.github/workflows/ci.yml`.
 - [Glossary of domain and technical terms](docs/glossary.md)
 - [Interview guide](docs/INTERVIEW_GUIDE.md)
 - [Manual accessibility review checklist](docs/accessibility-manual-review.md)
+- How this was built with AI assistance: [docs/ai-assisted-development.md](docs/ai-assisted-development.md)
 
 ## Security and privacy boundaries
 
